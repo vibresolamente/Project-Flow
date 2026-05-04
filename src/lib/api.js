@@ -369,6 +369,44 @@ export const configAPI = {
   },
 };
 
+// ── Groups ────────────────────────────────────────────────────────
+export const groupsAPI = {
+  async getAll() {
+    if (guard()) return null;
+    const { data, error } = await supabase
+      .from('pf_groups')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) { console.warn('[DB] getAll groups:', error.message); return null; }
+    return data;
+  },
+
+  async upsert(group) {
+    if (guard()) return;
+    const { error } = await supabase
+      .from('pf_groups')
+      .upsert({ 
+        id: group.id, 
+        name: group.name, 
+        description: group.description, 
+        privacy: group.privacy, 
+        members: group.members, 
+        admin_id: group.adminId,
+        created_at: group.createdAt 
+      }, { onConflict: 'id' });
+    if (error) console.warn('[DB] upsert group:', error.message);
+  },
+
+  async delete(id) {
+    if (guard()) return;
+    const { error } = await supabase
+      .from('pf_groups')
+      .delete()
+      .eq('id', id);
+    if (error) console.warn('[DB] delete group:', error.message);
+  },
+};
+
 // ── Bootstrap: load all data from Supabase ────────────────────────
 export async function loadAllFromDB() {
   if (guard()) return null;
@@ -381,9 +419,10 @@ export async function loadAllFromDB() {
     approvalsAPI.getAll(),
     requestsAPI.getAll(),
     threatsAPI.getAll(),
+    groupsAPI.getAll(),
   ]);
-  const [docs, users, logs, notifications, departments, approvals, requests, threats] = results.map(r =>
+  const [docs, users, logs, notifications, departments, approvals, requests, threats, groups] = results.map(r =>
     r.status === 'fulfilled' ? r.value : null
   );
-  return { docs, users, logs, notifications, departments, approvals, requests, threats };
+  return { docs, users, logs, notifications, departments, approvals, requests, threats, groups };
 }

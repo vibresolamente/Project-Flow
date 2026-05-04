@@ -6,7 +6,8 @@ import {
   ChevronRight, Mic, MicOff, Video, Send, CheckSquare, Layers, 
   Sparkles, ShieldCheck, Download, Eye, FileUp, MessageCircle, 
   ExternalLink, Trash2, History, Settings, MoreHorizontal,
-  Info, Activity, Database, Share2, Printer, Copy, Palette
+  Info, Activity, Database, Share2, Printer, Copy, Palette,
+  ShieldAlert
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -20,8 +21,24 @@ import { useApp } from '../context/AppContext';
 import '../index.css';
 
 // --- CONSTANTS & HELPERS ---
+import { 
+  Bold as BoldIcon, Italic as ItalicIcon, List as ListIcon, 
+  Heading1, Heading2, Quote, Code, Highlighter, ListOrdered
+} from 'lucide-react';
+import Bold from '@tiptap/extension-bold';
+import Italic from '@tiptap/extension-italic';
+import Heading from '@tiptap/extension-heading';
+import BulletList from '@tiptap/extension-bullet-list';
+import OrderedList from '@tiptap/extension-ordered-list';
+import ListItem from '@tiptap/extension-list-item';
+import Blockquote from '@tiptap/extension-blockquote';
+import Highlight from '@tiptap/extension-highlight';
+import CodeBlock from '@tiptap/extension-code-block';
+
 const TIPTAP_EXTENSIONS = [
   StarterKit.configure({ history: false }),
+  Bold, Italic, Heading.configure({ levels: [1, 2] }),
+  BulletList, OrderedList, ListItem, Blockquote, Highlight, CodeBlock
 ];
 
 const toB64 = (arr) => btoa(Array.from(arr).map(b => String.fromCharCode(b)).join(''));
@@ -37,6 +54,26 @@ const LuxeToast = ({ message, onRemove }) => (
 );
 
 // --- COMPONENT: COLLABORATIVE EDITOR ---
+const EditorToolbar = ({ editor }) => {
+  if (!editor) return null;
+  return (
+    <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
+      <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('bold') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><BoldIcon size={16} /></button>
+      <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('italic') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ItalicIcon size={16} /></button>
+      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 1 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Heading1 size={16} /></button>
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 2 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Heading2 size={16} /></button>
+      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+      <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('bulletList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ListIcon size={16} /></button>
+      <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('orderedList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ListOrdered size={16} /></button>
+      <div className="w-px h-4 bg-slate-200 mx-1"></div>
+      <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('blockquote') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Quote size={16} /></button>
+      <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('highlight') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Highlighter size={16} /></button>
+      <button onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('codeBlock') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Code size={16} /></button>
+    </div>
+  );
+};
+
 const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc }) => {
   const extensions = useMemo(() => [
     ...TIPTAP_EXTENSIONS,
@@ -51,7 +88,7 @@ const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userNam
     extensions,
     editorProps: {
       attributes: {
-        class: 'prose prose-sm max-w-none focus:outline-none min-h-[800px] px-16 py-20 bg-white shadow-2xl rounded-sm border border-slate-200'
+        class: 'prose prose-slate max-w-none focus:outline-none min-h-[800px] px-16 py-20 bg-white shadow-2xl rounded-sm border border-slate-200'
       }
     },
     onUpdate: ({ editor }) => {
@@ -67,21 +104,21 @@ const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userNam
     }
   }, [isLocked, editor]);
 
-  // Initial Seed from DB if Yjs is empty
   useEffect(() => {
     if (editor && currentDoc?.content && ydoc.getXmlFragment('prosemirror').length === 0) {
       const timer = setTimeout(() => {
         if (ydoc.getXmlFragment('prosemirror').length === 0) {
           editor.commands.setContent(currentDoc.content);
         }
-      }, 1000);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [editor, currentDoc?.id]);
 
   return (
-    <div className="editor-paper-container py-12 px-4 md:px-12 flex justify-center bg-slate-100/50 min-h-screen">
+    <div className="editor-paper-container py-12 px-4 md:px-12 flex flex-col items-center bg-slate-100/50 min-h-screen">
       <div className="w-full max-w-[850px]">
+        <EditorToolbar editor={editor} />
         <EditorContent editor={editor} />
       </div>
     </div>
@@ -90,21 +127,49 @@ const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userNam
 
 // --- COMPONENT: BINARY ASSET VIEWER ---
 const BinaryViewer = ({ currentDoc, onToggleCollab }) => (
-  <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 p-10 overflow-hidden relative">
-    <div className="absolute top-6 right-6 z-20 flex gap-3">
-      <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl">
-        <Download size={14} /> Original Asset
-      </div>
-      <button onClick={onToggleCollab} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all">
-        <FileText size={14} /> Annotate Live
-      </button>
+  <div className="flex-1 flex flex-col md:flex-row bg-slate-100 h-full overflow-hidden">
+    {/* ASSET PREVIEW */}
+    <div className="flex-1 p-6 flex flex-col">
+       <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Eye size={12} /> Visual Reference</p>
+          <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg">
+             <Download size={12} /> {currentDoc.name}
+          </div>
+       </div>
+       <div className="flex-1 bg-white shadow-2xl rounded-[2rem] overflow-hidden border border-slate-200 relative group">
+          {currentDoc.content?.includes('image/') ? (
+            <img src={currentDoc.content} alt={currentDoc.name} className="w-full h-full object-contain p-4" />
+          ) : (
+            <iframe src={currentDoc.content} className="w-full h-full border-none" title={currentDoc.name} />
+          )}
+       </div>
     </div>
-    <div className="w-full h-full max-w-5xl bg-white shadow-2xl rounded-3xl overflow-hidden border border-slate-200 relative group">
-      {currentDoc.content?.includes('image/') ? (
-        <img src={currentDoc.content} alt={currentDoc.name} className="w-full h-full object-contain p-4" />
-      ) : (
-        <iframe src={currentDoc.content} className="w-full h-full border-none" title={currentDoc.name} />
-      )}
+    {/* ANNOTATION SPACE */}
+    <div className="w-full md:w-[450px] bg-slate-50 border-l border-slate-200 flex flex-col p-6 overflow-y-auto">
+       <div className="flex items-center justify-between mb-6">
+          <h3 className="text-sm font-black text-slate-900 flex items-center gap-2"><Sparkles size={16} className="text-emerald-500"/> Team Annotations</h3>
+          <button onClick={onToggleCollab} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl hover:bg-emerald-700 transition-all">
+            <FileText size={14} /> Full Edit
+          </button>
+       </div>
+       <div className="space-y-4">
+          <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
+             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-between">
+                <span>Sarah Manager</span>
+                <span>12:44 PM</span>
+             </p>
+             <p className="text-sm font-medium text-slate-800 leading-relaxed">Please ensure the regional boundaries are updated to reflect the new Nairobi branch coordinates.</p>
+          </div>
+          <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 text-center">
+             <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Collaborative Note Active</p>
+          </div>
+       </div>
+       <div className="mt-auto pt-6">
+          <div className="relative">
+             <input type="text" placeholder="Add annotation..." className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-4 pr-12 text-sm font-bold shadow-inner outline-none focus:border-emerald-500 transition-all" />
+             <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-900 text-white rounded-xl"><Send size={16}/></button>
+          </div>
+       </div>
     </div>
   </div>
 );
@@ -121,11 +186,14 @@ const CollaborationWorkspace = () => {
 
   // UI State
   const [showLeftPanel, setShowLeftPanel] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(false);
-  const [activeTab, setActiveTab] = useState('comments');
+  const [showRightPanel, setShowRightPanel] = useState(true);
+  const [activeTab, setActiveTab] = useState('chat');
   const [isLocked, setIsLocked] = useState(false);
   const [isViewingOriginal, setIsViewingOriginal] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [connStatus, setConnStatus] = useState('connecting');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
   const [stats, setStats] = useState({ words: 0, readTime: 0 });
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -186,11 +254,20 @@ const CollaborationWorkspace = () => {
 
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
+        setConnStatus('connected');
         const sync1 = { stateVector: toB64(Y.encodeStateVector(doc)) };
         channel.send({ type: 'broadcast', event: 'y-sync-step-1', payload: sync1 });
         const awrUpdate = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
         channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(awrUpdate) } });
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setConnStatus('error');
       }
+    });
+
+    // Chat Sync via Yjs
+    const yChat = doc.getArray('chat');
+    yChat.observe(() => {
+      setChatMessages(yChat.toArray());
     });
 
     doc.on('update', (update, origin) => {
@@ -234,6 +311,19 @@ const CollaborationWorkspace = () => {
     addToast("Document version locked in cloud vault");
   };
 
+  const handleSendChat = (e) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim() || !ydoc) return;
+    const yChat = ydoc.getArray('chat');
+    yChat.push([{
+      user: userName,
+      message: chatInput,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      color: userColor
+    }]);
+    setChatInput('');
+  };
+
   const handleAddMember = (userId) => {
     const user = systemUsers.find(u => u.id === userId);
     if (!user) return;
@@ -267,9 +357,11 @@ const CollaborationWorkspace = () => {
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="text-sm font-bold tracking-tight text-slate-900">{currentDoc ? currentDoc.name : 'Collaboration Workspace'}</h1>
-              <Star size={14} className="text-slate-300 hover:text-amber-400 cursor-pointer" />
+              <div className={`w-2 h-2 rounded-full ${connStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : connStatus === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} title={`Signaling Status: ${connStatus}`}></div>
             </div>
-            <p className="text-[10px] font-medium text-slate-400">Modified {currentDoc ? 'just now' : 'Select a node'}</p>
+            <p className="text-[10px] font-medium text-slate-400">
+               {connStatus === 'connected' ? 'Sync Active' : connStatus === 'error' ? 'Sync Failure' : 'Initializing Signal...'}
+            </p>
           </div>
         </div>
 
@@ -419,14 +511,37 @@ const CollaborationWorkspace = () => {
                    )}
                    {activeTab === 'chat' && (
                       <div className="flex flex-col h-full">
-                         <div className="p-4 bg-blue-50 text-blue-700 rounded-2xl flex items-center gap-3 border border-blue-100 mb-6">
-                            <MessageCircle size={18} />
-                            <p className="text-[10px] font-black uppercase tracking-widest">Secure Room Active</p>
+                         <div className={`p-4 rounded-2xl flex items-center gap-3 border mb-6 shrink-0 ${connStatus === 'connected' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
+                            {connStatus === 'connected' ? <MessageCircle size={18} /> : <ShieldAlert size={18} />}
+                            <p className="text-[10px] font-black uppercase tracking-widest">{connStatus === 'connected' ? 'Real-time P2P Signal' : 'Signaling Failure'}</p>
                          </div>
-                         <div className="flex-1 flex flex-col items-center justify-center text-center opacity-30 italic">
-                            <Send size={40} className="text-slate-300 mb-4" />
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Real-time chat synchronized</p>
+                         <div className="flex-1 overflow-y-auto space-y-4 mb-4 scrollbar-hide">
+                            {chatMessages.length === 0 ? (
+                               <div className="text-center py-10 opacity-20 italic">
+                                  <Send size={40} className="mx-auto mb-2" />
+                                  <p className="text-[10px] font-black uppercase">No encrypted messages</p>
+                               </div>
+                             ) : (
+                               chatMessages.map((chat, i) => (
+                                 <div key={i} className={`flex flex-col ${chat.user === userName ? 'items-end' : 'items-start'}`}>
+                                    <div className={`p-4 rounded-2xl text-xs font-medium max-w-[85%] shadow-sm ${chat.user === userName ? 'bg-slate-900 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'}`}>
+                                       {chat.message}
+                                    </div>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase mt-1 px-1">{chat.user} • {chat.time}</span>
+                                 </div>
+                               ))
+                             )}
                          </div>
+                         <form onSubmit={handleSendChat} className="relative shrink-0">
+                            <input 
+                              type="text" 
+                              value={chatInput}
+                              onChange={e => setChatInput(e.target.value)}
+                              placeholder="Secure message..." 
+                              className="w-full bg-slate-100 border-none rounded-2xl py-4 pl-4 pr-12 text-xs font-bold outline-none focus:ring-2 ring-emerald-500/20" 
+                             />
+                            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-emerald-600 hover:scale-110 transition-transform"><Send size={18} /></button>
+                         </form>
                       </div>
                    )}
                    {activeTab === 'members' && (

@@ -222,21 +222,26 @@ const WorkflowManager = () => {
               </div>
             ) : (
               pendingRequests.map(req => (
-                <div key={req.id} className="card flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-sm">{req.resource}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Requested by <strong>{req.requestedBy}</strong> • {req.justification}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span style={{
-                      background: req.status === 'Approved' ? '#F0FDF4' : '#FFF7ED',
-                      color: req.status === 'Approved' ? '#16A34A' : '#D97706',
-                      fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px',
-                      border: `1px solid ${req.status === 'Approved' ? '#BBF7D0' : '#FDE68A'}`
-                    }}>{req.status}</span>
-                    {req.status === 'Pending' && canApprove && (
-                      <button onClick={() => approveRequest(req.id)} style={{ background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0', fontWeight: 700, fontSize: '12px', padding: '6px 16px', borderRadius: '6px', cursor: 'pointer' }}>Grant</button>
-                    )}
+                <div key={req.id} className="card p-0 overflow-hidden">
+                  <div className="flex items-center justify-between p-6">
+                    <div>
+                      <p className="font-bold text-sm">{req.resource}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Requested by <strong>{req.requestedBy}</strong> • {req.justification}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span style={{
+                        background: req.status === 'Approved' ? '#F0FDF4' : req.status === 'Rejected' ? '#FEF2F2' : '#FFF7ED',
+                        color: req.status === 'Approved' ? '#16A34A' : req.status === 'Rejected' ? '#DC2626' : '#D97706',
+                        fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '999px',
+                        border: `1px solid ${req.status === 'Approved' ? '#BBF7D0' : req.status === 'Rejected' ? '#FEE2E2' : '#FDE68A'}`
+                      }}>{req.status}</span>
+                      {req.status === 'Pending' && canApprove && (
+                        <div className="flex gap-2">
+                          <button onClick={() => approveRequest(req.id)} className="bg-emerald-600 text-white font-bold text-[10px] px-4 py-1.5 rounded-lg shadow-lg shadow-emerald-500/20 uppercase tracking-widest hover:bg-emerald-700 transition-colors">Grant</button>
+                          <button onClick={() => rejectAccessRequest(req.id)} className="bg-slate-200 text-slate-700 font-bold text-[10px] px-4 py-1.5 rounded-lg uppercase tracking-widest hover:bg-slate-300 transition-colors">Deny</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))

@@ -3,7 +3,7 @@ import {
   loadAllFromDB,
   documentsAPI, usersAPI, departmentsAPI,
   approvalsAPI, requestsAPI, notificationsAPI,
-  auditAPI, threatsAPI, configAPI,
+  auditAPI, threatsAPI, configAPI, groupsAPI,
 } from '../lib/api';
 import { isDbConfigured } from '../lib/supabase';
 import { storage } from '../lib/storage';
@@ -129,6 +129,15 @@ export const AppProvider = ({ children }) => {
             if (approvals?.length) setPendingApprovals(approvals);
             if (requests?.length) setPendingRequests(requests);
             if (threats?.length) setThreatAlerts(threats);
+            if (groups?.length) setGroups(groups.map(g => ({
+              id: g.id,
+              name: g.name,
+              description: g.description,
+              privacy: g.privacy,
+              members: g.members || [],
+              adminId: g.admin_id,
+              createdAt: g.created_at
+            })));
           }
         } catch (err) {
           console.warn('[DB] Supabase sync failed:', err);
@@ -416,18 +425,24 @@ export const AppProvider = ({ children }) => {
       createdAt: new Date().toISOString()
     };
     setGroups(prev => [...prev, newGroup]);
+    groupsAPI.upsert(newGroup).catch(() => {});
     logAction(userName, 'Created Group', name);
     pushNotification('system', `Group "${name}" has been created.`);
   };
 
   const updateGroupMembers = (groupId, members) => {
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
+    const group = groups.find(g => g.id === groupId);
+    if (group) {
+      groupsAPI.upsert({ ...group, members }).catch(() => {});
+    }
     logAction(userName, 'Updated Group Members', groupId);
   };
 
   const deleteGroup = (groupId) => {
     const group = groups.find(g => g.id === groupId);
     setGroups(prev => prev.filter(g => g.id !== groupId));
+    groupsAPI.delete(groupId).catch(() => {});
     logAction(userName, 'Deleted Group', group?.name);
   };
 
