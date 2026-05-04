@@ -55,6 +55,10 @@ export const AppProvider = ({ children }) => {
   const [threatAlerts, setThreatAlerts] = useState([
     { id: 1, type: 'info', message: 'Zero-Trust Kernel initialized.', time: new Date().toISOString() }
   ]);
+  const [groups, setGroups] = useState([
+    { id: 'g1', name: 'Strategic Planning', description: 'Focus on 2026-2030 roadmap.', members: ['u1', 'u2'], privacy: 'Private', createdAt: new Date().toISOString(), adminId: 'u1' },
+    { id: 'g2', name: 'General Discussion', description: 'Open forum for all staff.', members: ['u1', 'u2', 'u3'], privacy: 'Public', createdAt: new Date().toISOString(), adminId: 'u1' },
+  ]);
   const [lastHash, setLastHash] = useState('0000000000000000');
   const [activeDocId, setActiveDocId] = useState(null);
 
@@ -97,6 +101,9 @@ export const AppProvider = ({ children }) => {
 
       const savedThreats = await storage.get('pf_threats');
       if (savedThreats) setThreatAlerts(savedThreats);
+
+      const savedGroups = await storage.get('pf_groups');
+      if (savedGroups) setGroups(savedGroups);
 
       const savedLastHash = await storage.get('pf_last_hash');
       if (savedLastHash) setLastHash(savedLastHash);
@@ -150,6 +157,7 @@ export const AppProvider = ({ children }) => {
     storage.set('pf_watermark', watermarkConfig);
     storage.set('pf_theme', theme);
     storage.set('pf_threats', threatAlerts);
+    storage.set('pf_groups', groups);
     storage.set('pf_last_hash', lastHash);
     storage.set('pf_view_cols', columnVisibility);
   }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, dbReady]);
@@ -396,6 +404,33 @@ export const AppProvider = ({ children }) => {
     configAPI.set('watermark', config).catch(() => {});
   };
 
+  // ── Group Actions ─────────────────────────────────────────────
+  const createGroup = (name, description, privacy, members = []) => {
+    const newGroup = {
+      id: `g${Date.now()}`,
+      name,
+      description,
+      privacy,
+      members: [...new Set([currentUser?.id, ...members])],
+      adminId: currentUser?.id,
+      createdAt: new Date().toISOString()
+    };
+    setGroups(prev => [...prev, newGroup]);
+    logAction(userName, 'Created Group', name);
+    pushNotification('system', `Group "${name}" has been created.`);
+  };
+
+  const updateGroupMembers = (groupId, members) => {
+    setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
+    logAction(userName, 'Updated Group Members', groupId);
+  };
+
+  const deleteGroup = (groupId) => {
+    const group = groups.find(g => g.id === groupId);
+    setGroups(prev => prev.filter(g => g.id !== groupId));
+    logAction(userName, 'Deleted Group', group?.name);
+  };
+
   // ── Computed ──────────────────────────────────────────────────
   const unreadCount          = notifications.filter(n => !n.read).length;
   const pendingApprovalCount = pendingApprovals.filter(a => a.status === 'Pending').length;
@@ -431,6 +466,7 @@ export const AppProvider = ({ children }) => {
       lastHash, signDocument,
       columnVisibility, setColumnVisibility,
       activeDocId, setActiveDocId,
+      groups, createGroup, updateGroupMembers, deleteGroup,
     }}>
       {children}
     </AppContext.Provider>
