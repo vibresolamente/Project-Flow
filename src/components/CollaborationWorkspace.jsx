@@ -75,23 +75,18 @@ const EditorToolbar = ({ editor }) => {
 };
 
 const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc }) => {
-  // Safety Guard: Do not initialize if sync objects are missing
-  if (!ydoc || !awareness || !awareness.clientID) return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50 min-h-[600px]">
-       <Database className="animate-bounce text-slate-300" size={40} />
-       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Binding Peer Awareness...</p>
-    </div>
-  );
-
-  const extensions = useMemo(() => [
-    ...TIPTAP_EXTENSIONS,
-    Collaboration.configure({ document: ydoc, field: 'prosemirror' }),
-    CollaborationCursor.configure({
-      awareness: awareness,
-      provider: { awareness: awareness }, // Backwards compatibility for older versions
-      user: { name: userName, color: userColor }
-    })
-  ], [ydoc, awareness, userName, userColor]);
+  const extensions = useMemo(() => {
+    if (!ydoc || !awareness) return [...TIPTAP_EXTENSIONS];
+    return [
+      ...TIPTAP_EXTENSIONS,
+      Collaboration.configure({ document: ydoc, field: 'prosemirror' }),
+      CollaborationCursor.configure({
+        awareness: awareness,
+        provider: { awareness: awareness },
+        user: { name: userName, color: userColor }
+      })
+    ];
+  }, [ydoc, awareness, userName, userColor]);
 
   const editor = useEditor({
     extensions,
@@ -112,6 +107,14 @@ const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userNam
       editor.setEditable(!isLocked);
     }
   }, [isLocked, editor]);
+
+  // Safety Render Guard
+  if (!ydoc || !awareness || !awareness.clientID) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50 min-h-[600px]">
+       <Database className="animate-bounce text-slate-300" size={40} />
+       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Binding Peer Awareness...</p>
+    </div>
+  );
 
   useEffect(() => {
     if (editor && currentDoc?.content && ydoc.getXmlFragment('prosemirror').length === 0) {
@@ -243,14 +246,18 @@ const CollaborationWorkspace = () => {
 
   // --- SYNC ENGINE ---
   useEffect(() => {
+    if (!supabase) {
+      setConnStatus('error');
+      addToast("Supabase is not configured. Real-time sync disabled.");
+      return;
+    }
+
     const roomId = currentDoc ? `pf-room-${currentDoc.id}` : 'pf-room-global';
     const doc = new Y.Doc();
     const persistence = new IndexeddbPersistence(roomId, doc);
     const awr = new awarenessProtocol.Awareness(doc);
 
     awr.setLocalStateField('user', { name: userName, color: userColor });
-    setYdoc(doc);
-    setAwareness(awr);
 
     const channel = supabase.channel(roomId, { config: { broadcast: { self: false, ack: true } } });
     channelRef.current = channel;
@@ -297,6 +304,10 @@ const CollaborationWorkspace = () => {
       const states = Array.from(awr.getStates().values());
       setOnlineUsers(states.filter(s => s.user).map((s, i) => ({ ...s.user, id: i })));
     });
+
+    // ONLY set states after everything is wired
+    setYdoc(doc);
+    setAwareness(awr);
 
     return () => {
       channel.unsubscribe();
