@@ -76,7 +76,7 @@ const EditorToolbar = ({ editor }) => {
 
 const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc }) => {
   // Safety Guard: Do not initialize if sync objects are missing
-  if (!ydoc || !awareness) return (
+  if (!ydoc || !awareness || !awareness.clientID) return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50 min-h-[600px]">
        <Database className="animate-bounce text-slate-300" size={40} />
        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Binding Peer Awareness...</p>
