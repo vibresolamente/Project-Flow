@@ -88,6 +88,7 @@ const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userNam
     Collaboration.configure({ document: ydoc, field: 'prosemirror' }),
     CollaborationCursor.configure({
       awareness: awareness,
+      provider: { awareness: awareness }, // Backwards compatibility for older versions
       user: { name: userName, color: userColor }
     })
   ], [ydoc, awareness, userName, userColor]);
