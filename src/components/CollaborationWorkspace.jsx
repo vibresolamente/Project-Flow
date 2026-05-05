@@ -75,11 +75,19 @@ const EditorToolbar = ({ editor }) => {
 };
 
 const CollaborativeEditor = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc }) => {
+  // Safety Guard: Do not initialize if sync objects are missing
+  if (!ydoc || !awareness) return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50 min-h-[600px]">
+       <Database className="animate-bounce text-slate-300" size={40} />
+       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Binding Peer Awareness...</p>
+    </div>
+  );
+
   const extensions = useMemo(() => [
     ...TIPTAP_EXTENSIONS,
     Collaboration.configure({ document: ydoc, field: 'prosemirror' }),
     CollaborationCursor.configure({
-      awareness,
+      awareness: awareness,
       user: { name: userName, color: userColor }
     })
   ], [ydoc, awareness, userName, userColor]);
@@ -226,6 +234,11 @@ const CollaborationWorkspace = () => {
     if (!activeGroupId) return documents;
     return documents.filter(d => d.groupId === activeGroupId);
   }, [documents, activeGroupId]);
+
+  // Reset view state when document changes
+  useEffect(() => {
+    setIsViewingOriginal(false);
+  }, [activeDocId]);
 
   // --- SYNC ENGINE ---
   useEffect(() => {
@@ -455,11 +468,12 @@ const CollaborationWorkspace = () => {
         <main className="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
           {currentDoc ? (
             <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide">
-              {currentDoc.content?.startsWith('data:') && !isViewingOriginal ? (
+              {/* BINARY ASSET DETECTION [v4.1] */}
+              {((currentDoc.content?.startsWith('data:') || currentDoc.name?.match(/\.(pdf|jpg|jpeg|png)$/i)) && !isViewingOriginal) ? (
                 <BinaryViewer currentDoc={currentDoc} onToggleCollab={() => setIsViewingOriginal(true)} />
               ) : (ydoc && awareness) ? (
                 <CollaborativeEditor 
-                  key={`${currentDoc.id}-${ydoc.guid}`}
+                  key={`collab-${currentDoc.id}`}
                   ydoc={ydoc} awareness={awareness} isLocked={isLocked}
                   onStatsUpdate={setStats} userName={userName} userColor={userColor}
                   currentDoc={currentDoc}
@@ -468,6 +482,7 @@ const CollaborationWorkspace = () => {
                 <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-slate-50">
                   <div className="w-20 h-20 bg-white rounded-[2rem] shadow-2xl flex items-center justify-center text-slate-200 animate-pulse"><Database size={40} /></div>
                   <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Synchronizing Real-time Node...</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase">Establishing P2P Tunnel for {currentDoc.name}</p>
                 </div>
               )}
             </div>

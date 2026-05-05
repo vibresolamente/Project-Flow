@@ -44,11 +44,11 @@ const ModuleCard = ({ icon, title, desc, count, badge, onClick }) => (
   </div>
 );
 
-const RecentDocItem = ({ name, time, type, dept }) => {
+const RecentDocItem = ({ name, time, type, dept, onClick }) => {
   const typeColors = { XLS: '#16A34A', PDF: '#DC2626', DOC: '#2563EB', ZIP: '#6B7280' };
   const color = typeColors[type] || '#1F7A6B';
   return (
-    <div className="px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
+    <div onClick={onClick} className="px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors">
       <div className="flex items-center gap-3">
         <div style={{ background: `${color}15`, color, width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>
           {type}
@@ -181,7 +181,17 @@ const PortalView = ({ navigate, onUploadClick }) => {
               <div className="p-8 text-center text-muted-foreground text-sm">No documents found.</div>
             ) : (
               recentDocs.map(doc => (
-                <RecentDocItem key={doc.id} name={doc.name} time={doc.date} type={getExtension(doc.name)} dept={doc.dept} />
+                <RecentDocItem 
+                  key={doc.id} 
+                  name={doc.name} 
+                  time={doc.date} 
+                  type={getExtension(doc.name)} 
+                  dept={doc.dept} 
+                  onClick={() => {
+                    setActiveDocId(doc.id);
+                    navigate('collab');
+                  }}
+                />
               ))
             )}
           </div>
