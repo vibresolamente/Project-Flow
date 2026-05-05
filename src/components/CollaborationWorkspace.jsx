@@ -246,78 +246,89 @@ const CollaborationWorkspace = () => {
 
   // --- SYNC ENGINE ---
   useEffect(() => {
-    if (!supabase) {
-      setConnStatus('error');
-      addToast("Supabase is not configured. Real-time sync disabled.");
-      return;
-    }
+    let persistence = null;
+    let awr = null;
+    let channel = null;
+    let doc = null;
 
-    const roomId = currentDoc ? `pf-room-${currentDoc.id}` : 'pf-room-global';
-    const doc = new Y.Doc();
-    const persistence = new IndexeddbPersistence(roomId, doc);
-    const awr = new awarenessProtocol.Awareness(doc);
+    const initSync = async () => {
+      try {
+        if (!supabase) {
+          setConnStatus('error');
+          addToast("Supabase is not configured. Real-time sync disabled.");
+          return;
+        }
 
-    awr.setLocalStateField('user', { name: userName, color: userColor });
+        const roomId = currentDoc ? `pf-room-${currentDoc.id}` : 'pf-room-global';
+        doc = new Y.Doc();
+        persistence = new IndexeddbPersistence(roomId, doc);
+        awr = new awarenessProtocol.Awareness(doc);
 
-    const channel = supabase.channel(roomId, { config: { broadcast: { self: false, ack: true } } });
-    channelRef.current = channel;
+        awr.setLocalStateField('user', { name: userName, color: userColor });
 
-    channel.on('broadcast', { event: 'y-update' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
-    channel.on('broadcast', { event: 'y-awareness' }, ({ payload }) => payload.update && awarenessProtocol.applyAwarenessUpdate(awr, fromB64(payload.update), 'remote'));
-    
-    channel.on('broadcast', { event: 'y-sync-step-1' }, ({ payload }) => {
-      if (payload.stateVector) {
-        const update = Y.encodeStateAsUpdate(doc, fromB64(payload.stateVector));
-        channel.send({ type: 'broadcast', event: 'y-sync-step-2', payload: { update: toB64(update) } });
-      }
-    });
-    channel.on('broadcast', { event: 'y-sync-step-2' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
+        channel = supabase.channel(roomId, { config: { broadcast: { self: false, ack: true } } });
+        channelRef.current = channel;
 
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        setConnStatus('connected');
-        const sync1 = { stateVector: toB64(Y.encodeStateVector(doc)) };
-        channel.send({ type: 'broadcast', event: 'y-sync-step-1', payload: sync1 });
-        const awrUpdate = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
-        channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(awrUpdate) } });
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        channel.on('broadcast', { event: 'y-update' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
+        channel.on('broadcast', { event: 'y-awareness' }, ({ payload }) => payload.update && awarenessProtocol.applyAwarenessUpdate(awr, fromB64(payload.update), 'remote'));
+        
+        channel.on('broadcast', { event: 'y-sync-step-1' }, ({ payload }) => {
+          if (payload.stateVector) {
+            const update = Y.encodeStateAsUpdate(doc, fromB64(payload.stateVector));
+            channel.send({ type: 'broadcast', event: 'y-sync-step-2', payload: { update: toB64(update) } });
+          }
+        });
+        channel.on('broadcast', { event: 'y-sync-step-2' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
+
+        channel.subscribe((status, err) => {
+          if (status === 'SUBSCRIBED') {
+            setConnStatus('connected');
+            const sync1 = { stateVector: toB64(Y.encodeStateVector(doc)) };
+            channel.send({ type: 'broadcast', event: 'y-sync-step-1', payload: sync1 });
+            const awrUpdate = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
+            channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(awrUpdate) } });
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[Sync] Channel Error:', err);
+            setConnStatus('error');
+          }
+        });
+
+        const yChat = doc.getArray('chat');
+        yChat.observe(() => setChatMessages(yChat.toArray()));
+
+        doc.on('update', (update, origin) => {
+          if (origin !== 'remote' && origin !== 'indexeddb') {
+            const b64 = toB64(update);
+            if (b64.length < 24000) channel.send({ type: 'broadcast', event: 'y-update', payload: { update: b64 } });
+          }
+        });
+
+        awr.on('update', () => {
+          const update = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
+          channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(update) } });
+          const states = Array.from(awr.getStates().values());
+          setOnlineUsers(states.filter(s => s.user).map((s, i) => ({ ...s.user, id: i })));
+        });
+
+        setYdoc(doc);
+        setAwareness(awr);
+      } catch (err) {
+        console.error('[Sync] Init failed:', err);
         setConnStatus('error');
       }
-    });
+    };
 
-    // Chat Sync via Yjs
-    const yChat = doc.getArray('chat');
-    yChat.observe(() => {
-      setChatMessages(yChat.toArray());
-    });
-
-    doc.on('update', (update, origin) => {
-      if (origin !== 'remote' && origin !== 'indexeddb') {
-        const b64 = toB64(update);
-        if (b64.length < 24000) channel.send({ type: 'broadcast', event: 'y-update', payload: { update: b64 } });
-      }
-    });
-
-    awr.on('update', () => {
-      const update = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
-      channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(update) } });
-      const states = Array.from(awr.getStates().values());
-      setOnlineUsers(states.filter(s => s.user).map((s, i) => ({ ...s.user, id: i })));
-    });
-
-    // ONLY set states after everything is wired
-    setYdoc(doc);
-    setAwareness(awr);
+    initSync();
 
     return () => {
-      channel.unsubscribe();
-      persistence.destroy();
-      awr.destroy();
-      doc.destroy();
+      if (channel) channel.unsubscribe();
+      if (persistence) persistence.destroy();
+      if (awr) awr.destroy();
+      if (doc) doc.destroy();
       setYdoc(null);
       setAwareness(null);
     };
-  }, [currentDoc?.id]);
+  }, [currentDoc?.id, userName, userColor]);
 
   // AUTO-SAVE LOOP
   useEffect(() => {
@@ -480,10 +491,10 @@ const CollaborationWorkspace = () => {
         <main className="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
           {currentDoc ? (
             <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide">
-              {/* BINARY ASSET DETECTION [v4.1] */}
-              {((currentDoc.content?.startsWith('data:') || currentDoc.name?.match(/\.(pdf|jpg|jpeg|png)$/i)) && !isViewingOriginal) ? (
+              {/* BINARY ASSET DETECTION [v4.2] */}
+              {((currentDoc.content?.startsWith('data:') || currentDoc.content?.startsWith('http') || currentDoc.name?.match(/\.(pdf|jpg|jpeg|png)$/i)) && !isViewingOriginal) ? (
                 <BinaryViewer currentDoc={currentDoc} onToggleCollab={() => setIsViewingOriginal(true)} />
-              ) : (ydoc && awareness) ? (
+              ) : (ydoc && awareness && awareness.clientID) ? (
                 <CollaborativeEditor 
                   key={`collab-${currentDoc.id}`}
                   ydoc={ydoc} awareness={awareness} isLocked={isLocked}
