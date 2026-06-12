@@ -2,6 +2,7 @@ import { pipeline, env } from '@xenova/transformers';
 
 // Disable local models, since we will download from Hugging Face
 env.allowLocalModels = false;
+env.backends.onnx.wasm.numThreads = 1;
 
 class PipelineSingleton {
   static task = 'automatic-speech-recognition';
@@ -10,7 +11,10 @@ class PipelineSingleton {
 
   static async getInstance(progress_callback = null) {
     if (this.instance === null) {
-      this.instance = await pipeline(this.task, this.model, { progress_callback });
+      this.instance = await pipeline(this.task, this.model, { 
+        quantized: true,
+        progress_callback 
+      });
     }
     return this.instance;
   }
