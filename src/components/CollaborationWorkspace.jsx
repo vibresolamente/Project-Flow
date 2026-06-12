@@ -116,53 +116,81 @@ const getDocumentTextForEditing = (doc) => {
 
 const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc, editorRef, addToast }) => {
   const fileInputRef = useRef(null);
+  const workerRef = useRef(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState(0);
+  const [transcriptionStatusText, setTranscriptionStatusText] = useState('Processing audio matrix...');
 
-  const handleFileUpload = (e) => {
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('../workers/transcriptionWorker.js', import.meta.url), { type: 'module' });
+    
+    workerRef.current.addEventListener('message', (event) => {
+      const { status, output, data, error } = event.data;
+      if (status === 'progress' && data) {
+         if (data.status === 'progress') {
+             setTranscriptionProgress(Math.round(data.progress));
+             setTranscriptionStatusText('Downloading AI Model...');
+         } else if (data.status === 'ready') {
+             setTranscriptionStatusText('Model loaded.');
+         } else if (data.status === 'initiate') {
+             setTranscriptionStatusText(`Loading ${data.name}...`);
+             setTranscriptionProgress(0);
+         }
+      } else if (status === 'processing') {
+         setTranscriptionStatusText('Transcribing audio...');
+         setTranscriptionProgress(100);
+      } else if (status === 'complete') {
+          setIsTranscribing(false);
+          if (addToast) addToast("Transcription complete!");
+          const transcriptHtml = `
+            <br/>
+            <blockquote>
+              <strong>🎙️ TRANSCRIPTION:</strong><br/>
+              "${output}"
+            </blockquote>
+            <br/>
+          `;
+          
+          if (editorRef && editorRef.current) {
+            editorRef.current.chain().focus().insertContent(transcriptHtml).run();
+          }
+      } else if (status === 'error') {
+          setIsTranscribing(false);
+          if (addToast) addToast("Transcription error: " + error);
+      }
+    });
+
+    return () => {
+       if (workerRef.current) workerRef.current.terminate();
+    }
+  }, [addToast, editorRef]);
+
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Check if it's an audio or video file
     if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
       if (addToast) addToast("Only audio and video files are supported for transcription.");
       return;
     }
 
-    if (addToast) addToast(`Uploading ${file.name}...`);
+    if (addToast) addToast(`Processing ${file.name}...`);
     setIsTranscribing(true);
     setTranscriptionProgress(0);
+    setTranscriptionStatusText('Decoding audio file...');
 
-    // Mock Transcription Process
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 10;
-      setTranscriptionProgress(progress);
-      if (progress >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsTranscribing(false);
-          if (addToast) addToast("Transcription complete!");
-          
-          const transcriptHtml = `
-            <br/>
-            <blockquote>
-              <strong>🎙️ TRANSCRIPTION (${file.name}):</strong><br/>
-              "The enterprise collaboration system has been updated. We are seeing a significant improvement in cross-departmental syncs and real-time document integrity. Please ensure all compliance workflows are followed."
-            </blockquote>
-            <br/>
-          `;
-          
-          if (editor) {
-            editor.chain().focus().insertContent(transcriptHtml).run();
-          } else if (editorRef && editorRef.current) {
-            editorRef.current.chain().focus().insertContent(transcriptHtml).run();
-          }
-        }, 500);
-      }
-    }, 300); // 3 seconds mock delay
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const audioData = audioBuffer.getChannelData(0);
+      
+      workerRef.current.postMessage({ audioData });
+    } catch (err) {
+      setIsTranscribing(false);
+      if (addToast) addToast("Error decoding audio: " + err.message);
+    }
     
-    // Reset file input
     e.target.value = null;
   };
   const extensions = useMemo(() => {
@@ -261,7 +289,7 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
           </div>
           <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            Processing audio matrix...
+            {transcriptionStatusText}
           </div>
         </div>
       )}
