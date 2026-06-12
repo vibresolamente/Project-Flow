@@ -27,6 +27,7 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ErrorBoundary from './components/ErrorBoundary';
 import CollaborationWorkspace from './components/CollaborationWorkspace';
 import UserDashboard from './components/UserDashboard';
 import DataTransferHub from './components/DataTransferHub';
@@ -53,7 +54,7 @@ import DocumentCenterView from './components/DocumentCenterView';
 import { useApp } from './context/AppContext';
 
 const ApplicationLayout = () => {
-  const { activeTab, setActiveTab, userRole, setUserRole, pendingRequests, addDocument, unreadCount, pendingApprovalCount, theme, toggleTheme } = useApp();
+  const { activeTab, setActiveTab, userRole, setUserRole, pendingRequests, addDocument, unreadCount, pendingApprovalCount, theme, toggleTheme, isCloudOffline } = useApp();
   const [notifOpen, setNotifOpen] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
@@ -118,8 +119,10 @@ const ApplicationLayout = () => {
             <div className="hidden sm:block">
               <h1 className="text-base md:text-lg font-bold leading-none text-primary">ProjectFlow KE</h1>
               <div className="flex items-center gap-1.5 mt-0.5">
-                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                 <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">System Online: 99.9% Uptime</p>
+                 <div className={`w-1.5 h-1.5 rounded-full ${isCloudOffline ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`}></div>
+                 <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">
+                   {isCloudOffline ? 'Zero-Trust Local Sandbox Active' : 'System Online: Cloud Nodes Syncing'}
+                 </p>
               </div>
             </div>
           </div>
@@ -255,31 +258,31 @@ const ApplicationLayout = () => {
                 <input type="text" placeholder="Search documents, users..." readOnly />
               </div>
             </div>
-
             <AnimatePresence mode="wait">
-              {activeTab === 'portal' && <PortalView key="portal" navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} />}
-              {activeTab === 'docs' && <DocumentCenterView key="docs" navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} setShowViewManager={setShowViewManager} showViewManager={showViewManager} />}
-              {activeTab === 'collab' && <CollaborationWorkspace key="collab" />}
-              {activeTab === 'dashboard' && <UserDashboard key="dashboard" />}
-              {activeTab === 'search' && <GlobalSearch key="search" />}
-              {activeTab === 'requests' && <AccessRequestSystem key="requests" />}
-              {activeTab === 'analytics' && <UserAnalytics key="analytics" />}
-              {activeTab === 'kb' && <KnowledgeBase key="kb" />}
-              {activeTab === 'depts' && <DepartmentView key="depts" navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} />}
-              {activeTab === 'audit' && <GovernanceCenter key="audit" />}
-              {activeTab === 'testing' && <SystemTesting key="testing" />}
-              {activeTab === 'workflow' && <WorkflowManager key="workflow" />}
-              {activeTab === 'identity' && <IdentityManager key="identity" />}
-              {activeTab === 'vault' && <VaultSecurity key="vault" />}
-              {activeTab === 'threats' && <ThreatDashboard key="threats" />}
-              {activeTab === 'transfer' && <DataTransferHub key="transfer" />}
-
+              {activeTab === 'portal' && <ErrorBoundary key="portal"><PortalView navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} /></ErrorBoundary>}
+              {activeTab === 'docs' && <ErrorBoundary key="docs"><DocumentCenterView navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} setShowViewManager={setShowViewManager} showViewManager={showViewManager} /></ErrorBoundary>}
+              {activeTab === 'collab' && <ErrorBoundary key="collab"><CollaborationWorkspace /></ErrorBoundary>}
+              {activeTab === 'dashboard' && <ErrorBoundary key="dashboard"><UserDashboard /></ErrorBoundary>}
+              {activeTab === 'search' && <ErrorBoundary key="search"><GlobalSearch /></ErrorBoundary>}
+              {activeTab === 'requests' && <ErrorBoundary key="requests"><AccessRequestSystem /></ErrorBoundary>}
+              {activeTab === 'analytics' && <ErrorBoundary key="analytics"><UserAnalytics /></ErrorBoundary>}
+              {activeTab === 'kb' && <ErrorBoundary key="kb"><KnowledgeBase /></ErrorBoundary>}
+              {activeTab === 'depts' && <ErrorBoundary key="depts"><DepartmentView navigate={navigateTo} onUploadClick={() => setShowUploadModal(true)} /></ErrorBoundary>}
+              {activeTab === 'audit' && <ErrorBoundary key="audit"><GovernanceCenter /></ErrorBoundary>}
+              {activeTab === 'testing' && <ErrorBoundary key="testing"><SystemTesting /></ErrorBoundary>}
+              {activeTab === 'workflow' && <ErrorBoundary key="workflow"><WorkflowManager /></ErrorBoundary>}
+              {activeTab === 'identity' && <ErrorBoundary key="identity"><IdentityManager /></ErrorBoundary>}
+              {activeTab === 'vault' && <ErrorBoundary key="vault"><VaultSecurity /></ErrorBoundary>}
+              {activeTab === 'threats' && <ErrorBoundary key="threats"><ThreatDashboard /></ErrorBoundary>}
+              {activeTab === 'transfer' && <ErrorBoundary key="transfer"><DataTransferHub /></ErrorBoundary>}
               
               {activeTab === 'upload' && (
-                <UploadView key="upload" onUpload={(docDetails) => {
-                  addDocument(docDetails);
-                  navigateTo('docs');
-                }} />
+                <ErrorBoundary key="upload">
+                  <UploadView onUpload={(docDetails) => {
+                    addDocument(docDetails);
+                    navigateTo('docs');
+                  }} />
+                </ErrorBoundary>
               )}
             </AnimatePresence>
 

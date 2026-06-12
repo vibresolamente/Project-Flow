@@ -51,12 +51,37 @@ const DocRow = ({ id, name, dept, status, access, sensitivity, owner, version, d
     <td className="px-6 py-4 text-right">
       <div className="flex items-center justify-end gap-3">
         {status === 'draft' && !isRestricted && (
-          <button
-            onClick={(e) => { e.stopPropagation(); submitForApproval(); }}
-            className="hidden group-hover:flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded transition-colors"
-          >
-            <Zap size={14} /> Submit
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); submitForApproval(); }}
+              className="hidden group-hover:flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded transition-colors"
+            >
+              <Zap size={14} /> Submit
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLiveEdit({ id, name, vaultLocked, vaultPassword });
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#185ABD] hover:bg-[#103F85] px-3 py-1.5 rounded transition-colors shadow-sm"
+            >
+              <span className="font-serif italic font-medium">W</span> Live Edit
+            </button>
+          </div>
+        )}
+
+        {status === 'review' && !isRestricted && (
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLiveEdit({ id, name, vaultLocked, vaultPassword });
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-[#185ABD] hover:bg-[#103F85] px-3 py-1.5 rounded transition-colors shadow-sm"
+            >
+              <span className="font-serif italic font-medium">W</span> Live Edit
+            </button>
+          </div>
         )}
 
         {status === 'approved' && !isRestricted && (
@@ -327,9 +352,23 @@ const DocumentCenterView = ({ navigate, onUploadClick, setShowViewManager, showV
                   ))}
                 </div>
 
-                <div className="flex gap-2">
-                  <button className="flex-1 btn bg-emerald-600 hover:bg-emerald-700 text-white flex justify-center items-center gap-2 py-3.5 font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/20" onClick={() => setPreviewDoc(selectedDoc)}><FileText size={16} /> View Full</button>
-                  <button className="flex-1 btn btn-primary flex justify-center items-center gap-2 py-3.5 shadow-lg font-black text-xs uppercase tracking-widest" onClick={() => {
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <button className="flex-1 btn bg-emerald-600 hover:bg-emerald-700 text-white flex justify-center items-center gap-2 py-3.5 font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/20" onClick={() => setPreviewDoc(selectedDoc)}><FileText size={16} /> View Full</button>
+                    {!isRestricted(selectedDoc) && selectedDoc.status !== 'certified' && (
+                      <button className="flex-1 btn bg-[#185ABD] hover:bg-[#103F85] text-white flex justify-center items-center gap-2 py-3.5 font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20" onClick={() => {
+                        setSelectedDocId(null);
+                        if (selectedDoc.vaultLocked) {
+                          setDecryptionTarget(selectedDoc);
+                        } else {
+                          logAction(currentUser?.name, 'Opened in Word Online', selectedDoc.name);
+                          setActiveDocId(selectedDoc.id);
+                          navigate('collab');
+                        }
+                      }}><span className="font-serif italic font-medium">W</span> Live Edit</button>
+                    )}
+                  </div>
+                  <button className="w-full btn btn-primary flex justify-center items-center gap-2 py-3.5 shadow-lg font-black text-xs uppercase tracking-widest" onClick={() => {
                     const baseName = selectedDoc.name.split('.')[0];
                     const isWrappedBinary = selectedDoc.content?.includes('[BINARY ASSET DETECTED]');
                     const isOriginalBinary = selectedDoc.content?.startsWith('data:') || isWrappedBinary;

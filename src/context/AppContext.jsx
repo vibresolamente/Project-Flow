@@ -5,7 +5,7 @@ import {
   approvalsAPI, requestsAPI, notificationsAPI,
   auditAPI, threatsAPI, configAPI, groupsAPI,
 } from '../lib/api';
-import { isDbConfigured } from '../lib/supabase';
+import { isDbConfigured, isCloudOffline } from '../lib/supabase';
 import { storage } from '../lib/storage';
 
 const AppContext = createContext();
@@ -216,7 +216,7 @@ export const AppProvider = ({ children }) => {
 
   // ── Document Actions ──────────────────────────────────────────
   const addDocument = (doc) => {
-    const newDoc = { ...doc, id: Date.now().toString(), status: 'approved', date: new Date().toISOString().split('T')[0], version: 1, owner: userName, sensitivity: doc.sensitivity || 'Internal' };
+    const newDoc = { ...doc, id: doc.id || Date.now().toString(), status: 'approved', date: new Date().toISOString().split('T')[0], version: 1, owner: userName, sensitivity: doc.sensitivity || 'Internal' };
     setDocuments(prev => [newDoc, ...prev]);
     documentsAPI.upsert(newDoc).catch(() => {});
     logAction(userName, 'Uploaded', newDoc.name);
@@ -454,7 +454,7 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       activeTab, setActiveTab,
-      dbReady, isDbConfigured,
+      dbReady, isDbConfigured, isCloudOffline,
 
       systemUsers, currentUser, setCurrentUser,
       setUserRole: (role) => setCurrentUser(prev => prev ? { ...prev, role } : null),
