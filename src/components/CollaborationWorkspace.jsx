@@ -128,7 +128,8 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
   }, []);
 
   const getApiKey = () => {
-    return localStorage.getItem('projectflow_openai_key') || import.meta.env.VITE_OPENAI_API_KEY;
+    // Rely on Vercel Edge Function environment variables instead of frontend keys
+    return true;
   };
 
   const handleFileUpload = async (e) => {
@@ -160,9 +161,6 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
       
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        },
         body: formData
       });
 
@@ -571,9 +569,7 @@ const CollaborationWorkspace = () => {
     setIsAnalyzing(true);
     
     try {
-      const apiKey = localStorage.getItem('projectflow_openai_key'); // Provide fallback auth
       const headers = { 'Content-Type': 'application/json' };
-      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
