@@ -116,57 +116,23 @@ const getDocumentTextForEditing = (doc) => {
 
 const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc, editorRef, addToast }) => {
   const fileInputRef = useRef(null);
-  const workerRef = useRef(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionProgress, setTranscriptionProgress] = useState(0);
   const [transcriptionStatusText, setTranscriptionStatusText] = useState('Processing audio matrix...');
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [tempApiKey, setTempApiKey] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
 
   useEffect(() => {
-    workerRef.current = new Worker(new URL('../workers/transcriptionWorker.js', import.meta.url), { type: 'module' });
-    
-    workerRef.current.addEventListener('message', (event) => {
-      const { status, output, data, error } = event.data;
-      if (status === 'progress' && data) {
-         if (data.status === 'progress') {
-             setTranscriptionProgress(Math.round(data.progress));
-             setTranscriptionStatusText('Downloading AI Model...');
-         } else if (data.status === 'ready') {
-             setTranscriptionStatusText('Model loaded.');
-         } else if (data.status === 'initiate') {
-             setTranscriptionStatusText(`Loading ${data.name}...`);
-             setTranscriptionProgress(0);
-         }
-      } else if (status === 'processing') {
-         setTranscriptionStatusText('Transcribing audio...');
-         setTranscriptionProgress(100);
-      } else if (status === 'complete') {
-          setIsTranscribing(false);
-          if (addToast) addToast("Transcription complete!");
-          const transcriptHtml = `
-            <br/>
-            <blockquote>
-              <strong>🎙️ TRANSCRIPTION:</strong><br/>
-              "${output}"
-            </blockquote>
-            <br/>
-          `;
-          
-          if (editorRef && editorRef.current) {
-            editorRef.current.chain().focus().insertContent(transcriptHtml).run();
-          }
-      } else if (status === 'error') {
-          setIsTranscribing(false);
-          if (addToast) addToast("Transcription error: " + error);
-      }
-    });
+    // We no longer need the local model worker.
+  }, []);
 
-    return () => {
-       if (workerRef.current) workerRef.current.terminate();
-    }
-  }, [addToast, editorRef]);
+  const getApiKey = () => {
+    return localStorage.getItem('projectflow_openai_key') || import.meta.env.VITE_OPENAI_API_KEY;
+  };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files ? e.target.files[0] : e;
     if (!file) return;
     
     if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
@@ -174,25 +140,75 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
       return;
     }
 
-    if (addToast) addToast(`Processing ${file.name}...`);
+    const apiKey = getApiKey();
+    if (!apiKey) {
+       setPendingFile(file);
+       setShowApiKeyModal(true);
+       return;
+    }
+
+    if (addToast) addToast(`Uploading ${file.name} to Cloud AI...`);
     setIsTranscribing(true);
-    setTranscriptionProgress(0);
-    setTranscriptionStatusText('Decoding audio file...');
+    setTranscriptionProgress(30);
+    setTranscriptionStatusText('Transcribing and Translating (Swahili/English)...');
 
     try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-      const arrayBuffer = await file.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const audioData = audioBuffer.getChannelData(0);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('model', 'whisper-1');
+      // The /translations endpoint automatically detects the language and returns English text.
       
-      workerRef.current.postMessage({ audioData });
+      const response = await fetch('https://api.openai.com/v1/audio/translations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Transcription failed');
+      }
+
+      const data = await response.json();
+      setTranscriptionProgress(100);
+      setIsTranscribing(false);
+      
+      if (addToast) addToast("Transcription & Translation complete!");
+      
+      const transcriptHtml = `
+        <br/>
+        <blockquote>
+          <strong>🎙️ AI TRANSCRIPTION & TRANSLATION:</strong><br/>
+          "${data.text}"
+        </blockquote>
+        <br/>
+      `;
+      
+      if (editorRef && editorRef.current) {
+        editorRef.current.chain().focus().insertContent(transcriptHtml).run();
+      }
     } catch (err) {
       setIsTranscribing(false);
-      if (addToast) addToast("Error decoding audio: " + err.message);
+      setTranscriptionProgress(0);
+      if (addToast) addToast("Error processing audio: " + err.message);
     }
     
-    e.target.value = null;
+    if (e.target && e.target.value) e.target.value = null;
   };
+
+  const handleSaveApiKey = () => {
+    if (tempApiKey.trim()) {
+      localStorage.setItem('projectflow_openai_key', tempApiKey.trim());
+      setShowApiKeyModal(false);
+      if (pendingFile) {
+        handleFileUpload(pendingFile);
+        setPendingFile(null);
+      }
+    }
+  };
+
   const extensions = useMemo(() => {
     if (!ydoc || !awareness) return [...TIPTAP_EXTENSIONS];
     try {
@@ -274,6 +290,7 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
   }, [editor, currentDoc?.id, currentDoc?.content, ydoc]);
 
   return (
+    <>
     <div className="editor-paper-container py-12 px-4 md:px-12 flex flex-col items-center bg-slate-100/50 min-h-screen relative">
       {isTranscribing && (
         <div className="absolute top-4 right-4 bg-slate-900 text-white p-4 rounded-xl shadow-lg z-50 flex flex-col gap-2 min-w-[250px] border border-white/10">
@@ -306,6 +323,39 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
         <EditorContent editor={editor} />
       </div>
     </div>
+
+    {/* API Key Modal for Transcription */}
+    <AnimatePresence>
+      {showApiKeyModal && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm"
+        >
+           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-8">
+             <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">OpenAI Configuration</h2>
+                <button onClick={() => setShowApiKeyModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+             </div>
+             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+               To perform high-speed Swahili & English transcription/translation, please provide your OpenAI API key. This key is stored securely in your browser's local storage and is never sent to our servers.
+             </p>
+             <input 
+               type="password"
+               placeholder="sk-proj-..."
+               value={tempApiKey}
+               onChange={(e) => setTempApiKey(e.target.value)}
+               className="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:outline-none mb-6 text-sm font-medium"
+             />
+             <button onClick={handleSaveApiKey} className="w-full py-4 bg-emerald-500 text-white rounded-2xl text-xs font-black tracking-widest uppercase hover:bg-emerald-600 transition-colors">
+               Save & Transcribe
+             </button>
+           </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 };
 
