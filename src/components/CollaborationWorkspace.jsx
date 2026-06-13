@@ -158,7 +158,7 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
       formData.append('model', 'whisper-1');
       // The /translations endpoint automatically detects the language and returns English text.
       
-      const response = await fetch('https://api.openai.com/v1/audio/translations', {
+      const response = await fetch('/api/transcribe', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`
