@@ -43,6 +43,12 @@ const retryFetch = async (url, options) => {
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
+      // If we reach here, all retries failed due to a network connection error
+      if (localStorage.getItem('pf_supabase_offline') !== 'true') {
+        localStorage.setItem('pf_supabase_offline', 'true');
+        console.warn('[DB] Supabase domain is unreachable during fetch. Activating local security sandbox.');
+        window.location.reload();
+      }
       throw error;
     }
   }

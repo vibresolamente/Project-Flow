@@ -420,23 +420,42 @@ export async function loadAllFromDB() {
     }
   };
 
-  // Run queries sequentially with a tiny spacing (10ms) to prevent slamming HTTP/2 stream bounds
+  const isOffline = () => localStorage.getItem('pf_supabase_offline') === 'true';
+
+  // Run queries sequentially with a tiny spacing (10ms) to prevent slamming HTTP/2 stream bounds.
+  // Check the offline status between queries to immediately abort if a connection error marks us offline.
   const docs = await safeCall(documentsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const users = await safeCall(usersAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const logs = await safeCall(auditAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const notifications = await safeCall(notificationsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const departments = await safeCall(departmentsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const approvals = await safeCall(approvalsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const requests = await safeCall(requestsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const threats = await safeCall(threatsAPI.getAll());
+  if (isOffline()) return null;
   await new Promise(r => setTimeout(r, 10));
+
   const groups = await safeCall(groupsAPI.getAll());
 
   return { docs, users, logs, notifications, departments, approvals, requests, threats, groups };
