@@ -124,13 +124,40 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
   const [pendingFile, setPendingFile] = useState(null);
 
   useEffect(() => {
-    // We no longer need the local model worker.
-  }, []);
-
-  const getApiKey = () => {
-    // Rely on Vercel Edge Function environment variables instead of frontend keys
-    return true;
-  };
+    // Setup worker listener for transcribe status updates
+    if (!aiWorker) return;
+    const onMessage = (e) => {
+      const { action, status, message, result, id } = e.data;
+      if (id !== 'transcribe-audio') return;
+      
+      if (status === 'progress') {
+        setTranscriptionStatusText(message);
+        setTranscriptionProgress(p => p < 90 ? p + Math.random() * 5 : p);
+      } else if (status === 'success') {
+        setTranscriptionProgress(100);
+        setIsTranscribing(false);
+        if (addToast) addToast("Transcription complete!");
+        
+        const transcriptHtml = `
+          <br/>
+          <blockquote>
+            <strong>🎙️ SECURE LOCAL AI TRANSCRIPTION:</strong><br/>
+            "${result.text}"
+          </blockquote>
+          <br/>
+        `;
+        if (editorRef && editorRef.current) {
+          editorRef.current.chain().focus().insertContent(transcriptHtml).run();
+        }
+      } else if (status === 'error') {
+        setIsTranscribing(false);
+        setTranscriptionProgress(0);
+        if (addToast) addToast("Error processing audio: " + e.data.error);
+      }
+    };
+    aiWorker.addEventListener('message', onMessage);
+    return () => aiWorker.removeEventListener('message', onMessage);
+  }, [editorRef]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files ? e.target.files[0] : e;
@@ -141,56 +168,26 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
       return;
     }
 
-    const apiKey = getApiKey();
-    if (!apiKey) {
-       setPendingFile(file);
-       setShowApiKeyModal(true);
-       return;
-    }
-
-    if (addToast) addToast(`Uploading ${file.name} to Cloud AI...`);
+    if (addToast) addToast(`Decoding audio ${file.name} locally...`);
     setIsTranscribing(true);
-    setTranscriptionProgress(30);
-    setTranscriptionStatusText('Transcribing and Translating (Swahili/English)...');
+    setTranscriptionProgress(10);
+    setTranscriptionStatusText('Decoding audio file...');
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('model', 'whisper-1');
-      // The /translations endpoint automatically detects the language and returns English text.
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const float32Array = audioBuffer.getChannelData(0);
       
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData
+      aiWorker.postMessage({
+        id: 'transcribe-audio',
+        action: 'transcribe',
+        payload: { audio: float32Array }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Transcription failed');
-      }
-
-      const data = await response.json();
-      setTranscriptionProgress(100);
-      setIsTranscribing(false);
-      
-      if (addToast) addToast("Transcription & Translation complete!");
-      
-      const transcriptHtml = `
-        <br/>
-        <blockquote>
-          <strong>🎙️ AI TRANSCRIPTION & TRANSLATION:</strong><br/>
-          "${data.text}"
-        </blockquote>
-        <br/>
-      `;
-      
-      if (editorRef && editorRef.current) {
-        editorRef.current.chain().focus().insertContent(transcriptHtml).run();
-      }
     } catch (err) {
       setIsTranscribing(false);
       setTranscriptionProgress(0);
-      if (addToast) addToast("Error processing audio: " + err.message);
+      if (addToast) addToast("Error decoding audio: " + err.message);
     }
     
     if (e.target && e.target.value) e.target.value = null;
@@ -565,28 +562,32 @@ const CollaborationWorkspace = () => {
       return;
     }
 
-    if (addToast) addToast("AI Semantic Engine processing live data...");
+    if (addToast) addToast("Local Semantic Engine processing data...");
     setIsAnalyzing(true);
     
-    try {
-      const headers = { 'Content-Type': 'application/json' };
-
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ text })
-      });
+    const analysisListener = (e) => {
+      const { status, result, id, error } = e.data;
+      if (id !== 'semantic-audit') return;
       
-      if (!response.ok) throw new Error("Analysis failed");
-      const data = await response.json();
-      setSemanticAnalysis(data);
-      if (addToast) addToast("Semantic Compliance Audit Complete");
-    } catch (err) {
-      console.error(err);
-      if (addToast) addToast("Error during semantic audit");
-    } finally {
-      setIsAnalyzing(false);
-    }
+      if (status === 'success') {
+        setSemanticAnalysis(result);
+        if (addToast) addToast("Semantic Compliance Audit Complete");
+        setIsAnalyzing(false);
+        aiWorker.removeEventListener('message', analysisListener);
+      } else if (status === 'error') {
+        console.error(error);
+        if (addToast) addToast("Error during semantic audit");
+        setIsAnalyzing(false);
+        aiWorker.removeEventListener('message', analysisListener);
+      }
+    };
+    
+    aiWorker.addEventListener('message', analysisListener);
+    aiWorker.postMessage({
+      id: 'semantic-audit',
+      action: 'analyze',
+      payload: { text }
+    });
   };
 
   const handleAiAction = async (action) => {
