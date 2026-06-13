@@ -16,10 +16,11 @@ self.onmessage = async (event) => {
     if (action === 'transcribe') {
       const { audio } = payload; // Expected to be a Float32Array
       
-      // Load transcriber
+      // Load transcriber — whisper-base is multilingual (Swahili + English) and 3x more
+      // accurate than whisper-tiny, especially for vocals in music.
       if (!PipelineCache.transcriber) {
-        self.postMessage({ id, status: 'progress', message: 'Downloading Whisper AI model... (this happens once)' });
-        PipelineCache.transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+        self.postMessage({ id, status: 'progress', message: 'Downloading Whisper AI model (~145 MB, one-time only)...' });
+        PipelineCache.transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
           progress_callback: (prog) => {
             if (prog.status === 'progress') {
               self.postMessage({ id, status: 'progress', message: `Downloading model... ${Math.round(prog.progress)}%` });
@@ -28,14 +29,14 @@ self.onmessage = async (event) => {
         });
       }
       
-      self.postMessage({ id, status: 'progress', message: 'Transcribing audio...' });
+      self.postMessage({ id, status: 'progress', message: 'Transcribing audio (detecting language automatically)...' });
       
       const transcriber = PipelineCache.transcriber;
       const output = await transcriber(audio, {
         chunk_length_s: 30,
         stride_length_s: 5,
-        language: 'english',
-        task: 'transcribe'
+        task: 'transcribe',
+        return_timestamps: true
       });
       
       self.postMessage({ id, status: 'success', result: { text: output.text } });
