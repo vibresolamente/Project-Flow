@@ -20,6 +20,12 @@ import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
 import '../index.css';
 
+// Single global instance of the AI worker
+let aiWorker = null;
+if (typeof window !== 'undefined') {
+  aiWorker = new Worker(new URL('../workers/aiWorker.js', import.meta.url), { type: 'module' });
+}
+
 // --- CONSTANTS & HELPERS ---
 import { 
   Bold as BoldIcon, Italic as ItalicIcon, List as ListIcon, 
