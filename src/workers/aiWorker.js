@@ -14,7 +14,7 @@ self.onmessage = async (event) => {
   
   try {
     if (action === 'transcribe') {
-      const { audio } = payload; // Expected to be a Float32Array
+      const { audio, mode } = payload; // Expected to be a Float32Array, mode can be 'speech' or 'music'
       
       // Load transcriber — whisper-base is multilingual (Swahili + English) and 3x more
       // accurate than whisper-tiny, especially for vocals in music.
@@ -29,14 +29,36 @@ self.onmessage = async (event) => {
         });
       }
       
-      self.postMessage({ id, status: 'progress', message: 'Transcribing audio (detecting language automatically)...' });
+      self.postMessage({ id, status: 'progress', message: `Transcribing audio in ${mode === 'music' ? 'Music/Lyric' : 'Speech'} mode...` });
       
       const transcriber = PipelineCache.transcriber;
+      
+      const generate_kwargs = {
+        task: 'transcribe'
+      };
+      
+      if (mode === 'music') {
+        try {
+          const promptText = "Here are the lyrics of the song: ";
+          const prompt_ids = transcriber.tokenizer.encode(promptText, { add_special_tokens: false });
+          generate_kwargs.prompt_ids = prompt_ids;
+        } catch (e) {
+          console.warn('[AI Worker] Failed to tokenize prompt, continuing without prompt_ids:', e);
+        }
+        generate_kwargs.no_speech_threshold = 0.25;  // very lenient with musical background VAD
+        generate_kwargs.logprob_threshold = -1.2;    // allow lower logprobs for vocal extraction
+        generate_kwargs.compression_ratio_threshold = 2.4;
+      } else {
+        generate_kwargs.no_speech_threshold = 0.55;
+        generate_kwargs.logprob_threshold = -1.0;
+      }
+      
       const output = await transcriber(audio, {
         chunk_length_s: 30,
         stride_length_s: 5,
         task: 'transcribe',
-        return_timestamps: true
+        return_timestamps: true,
+        generate_kwargs
       });
       
       self.postMessage({ id, status: 'success', result: { text: output.text } });

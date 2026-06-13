@@ -76,10 +76,10 @@ const LuxeToast = ({ message, onRemove }) => (
 );
 
 // --- COMPONENT: COLLABORATIVE EDITOR ---
-const EditorToolbar = ({ editor, onUploadClick }) => {
+const EditorToolbar = ({ editor, onUploadClick, transcriptionMode, setTranscriptionMode }) => {
   if (!editor) return null;
   return (
-    <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
+    <div className="flex flex-wrap items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
       <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('bold') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><BoldIcon size={16} /></button>
       <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('italic') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ItalicIcon size={16} /></button>
       <div className="w-px h-4 bg-slate-200 mx-1"></div>
@@ -92,8 +92,27 @@ const EditorToolbar = ({ editor, onUploadClick }) => {
       <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('blockquote') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Quote size={16} /></button>
       <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('highlight') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Highlighter size={16} /></button>
       <button onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('codeBlock') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Code size={16} /></button>
-      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-      <button onClick={onUploadClick} className="p-2 rounded-lg transition-all hover:bg-slate-100 text-slate-600" title="Upload Media for Transcription"><FileUp size={16} /></button>
+      
+      <div className="flex items-center gap-1.5 ml-auto pl-2">
+        <select 
+          value={transcriptionMode} 
+          onChange={(e) => setTranscriptionMode(e.target.value)}
+          className="bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 focus:outline-none focus:border-slate-300 cursor-pointer px-2 py-1.5 uppercase tracking-wider transition-colors hover:bg-slate-100"
+          title="Tuning Mode for Transcription"
+        >
+          <option value="speech">🎙️ Speech</option>
+          <option value="music">🎵 Music / Lyrics</option>
+        </select>
+        
+        <button 
+          onClick={onUploadClick} 
+          className="p-2 rounded-lg transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider"
+          title="Upload Media for Local AI Transcription"
+        >
+          <FileUp size={14} />
+          Transcribe
+        </button>
+      </div>
     </div>
   );
 };
@@ -128,6 +147,7 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKey, setTempApiKey] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
+  const [transcriptionMode, setTranscriptionMode] = useState('speech');
 
   useEffect(() => {
     // Setup worker listener for transcribe status updates
@@ -188,7 +208,10 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
       aiWorker.postMessage({
         id: 'transcribe-audio',
         action: 'transcribe',
-        payload: { audio: float32Array }
+        payload: { 
+          audio: float32Array,
+          mode: transcriptionMode
+        }
       });
     } catch (err) {
       setIsTranscribing(false);
@@ -320,7 +343,12 @@ const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, us
           accept="audio/*,video/*" 
           onChange={handleFileUpload} 
         />
-        <EditorToolbar editor={editor} onUploadClick={() => fileInputRef.current?.click()} />
+        <EditorToolbar 
+          editor={editor} 
+          onUploadClick={() => fileInputRef.current?.click()} 
+          transcriptionMode={transcriptionMode}
+          setTranscriptionMode={setTranscriptionMode}
+        />
         <EditorContent editor={editor} />
       </div>
     </div>
