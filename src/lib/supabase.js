@@ -11,8 +11,48 @@ export const isDbConfigured =
   !supabaseUrl.includes('YOUR_PROJECT_ID') &&
   !isCachedOffline;
 
+// Robust fetch wrapper that retries transient failures (e.g. network drops, HTTP/2 stream refusals, or rate limits)
+const retryFetch = async (url, options) => {
+  const maxRetries = 3;
+  const initialDelay = 150;
+  let attempt = 0;
+
+  while (true) {
+    try {
+      const response = await fetch(url, options);
+      // Retry for transient server/rate-limit status codes (429, 502, 503, 504)
+      if (
+        (response.status === 429 || 
+         response.status === 502 || 
+         response.status === 503 || 
+         response.status === 504) && 
+        attempt < maxRetries
+      ) {
+        attempt++;
+        const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 50;
+        console.warn(`[Supabase Fetch] Status ${response.status}. Retrying in ${Math.round(delay)}ms (Attempt ${attempt}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (attempt < maxRetries) {
+        attempt++;
+        const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 50;
+        console.warn(`[Supabase Fetch] Connection failure or stream refused. Retrying in ${Math.round(delay)}ms (Attempt ${attempt}/${maxRetries})...`, error);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
 export const supabase = isDbConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        fetch: retryFetch,
+      },
       realtime: {
         params: {
           eventsPerSecond: 40,

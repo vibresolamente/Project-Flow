@@ -406,23 +406,38 @@ export const groupsAPI = {
     if (error) console.warn('[DB] delete group:', error.message);
   },
 };
-
 // ── Bootstrap: load all data from Supabase ────────────────────────
 export async function loadAllFromDB() {
   if (guard()) return null;
-  const results = await Promise.allSettled([
-    documentsAPI.getAll(),
-    usersAPI.getAll(),
-    auditAPI.getAll(),
-    notificationsAPI.getAll(),
-    departmentsAPI.getAll(),
-    approvalsAPI.getAll(),
-    requestsAPI.getAll(),
-    threatsAPI.getAll(),
-    groupsAPI.getAll(),
-  ]);
-  const [docs, users, logs, notifications, departments, approvals, requests, threats, groups] = results.map(r =>
-    r.status === 'fulfilled' ? r.value : null
-  );
+
+  // Safe execution wrapper for each API call
+  const safeCall = async (apiPromise) => {
+    try {
+      return await apiPromise;
+    } catch (err) {
+      console.warn('[DB] Load query failed:', err);
+      return null;
+    }
+  };
+
+  // Run queries sequentially with a tiny spacing (10ms) to prevent slamming HTTP/2 stream bounds
+  const docs = await safeCall(documentsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const users = await safeCall(usersAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const logs = await safeCall(auditAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const notifications = await safeCall(notificationsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const departments = await safeCall(departmentsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const approvals = await safeCall(approvalsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const requests = await safeCall(requestsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const threats = await safeCall(threatsAPI.getAll());
+  await new Promise(r => setTimeout(r, 10));
+  const groups = await safeCall(groupsAPI.getAll());
+
   return { docs, users, logs, notifications, departments, approvals, requests, threats, groups };
 }
