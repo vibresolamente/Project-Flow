@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useApp } from '../context/AppContext';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -13,6 +14,31 @@ import {
 } from 'lucide-react';
 
 const UserAnalytics = () => {
+  const { systemStats, systemUsers, documents } = useApp();
+
+  const activeUsersCount = systemUsers?.length || 0;
+  const totalReads = systemStats?.totalReads || 0;
+  
+  // Calculate storage used from document lengths
+  const storageBytes = documents.reduce((acc, doc) => acc + (doc.content?.length || 0), 0);
+  const storageFormatted = storageBytes > 1024 * 1024 ? `${(storageBytes / (1024 * 1024)).toFixed(2)} MB` : 
+                           storageBytes > 1024 ? `${(storageBytes / 1024).toFixed(2)} KB` : 
+                           `${storageBytes} B`;
+
+  const formatNumber = (num) => num > 999 ? (num/1000).toFixed(1) + 'k' : num;
+
+  const popularDocs = useMemo(() => {
+    if (!systemStats?.docReads || !documents) return [];
+    
+    return Object.entries(systemStats.docReads)
+      .map(([id, count]) => {
+        const doc = documents.find(d => d.id === id);
+        return { name: doc ? doc.name : `Unknown (${id})`, count };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [systemStats?.docReads, documents]);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -36,10 +62,10 @@ const UserAnalytics = () => {
 
       {/* KPI STRIP */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard label="Total Reads" value="1.2k" trend="+14%" icon={<FileText />} upward />
-        <KPICard label="Active Users" value="84" trend="+5%" icon={<Users />} upward />
-        <KPICard label="Auth Requests" value="342" trend="-2%" icon={<TrendingUp />} />
-        <KPICard label="Storage Used" value="1.4TB" trend="+12%" icon={<BarChart3 />} upward />
+        <KPICard label="Total Reads" value={formatNumber(totalReads)} trend="Live" icon={<FileText />} upward />
+        <KPICard label="Active Users" value={activeUsersCount} trend="Live" icon={<Users />} upward />
+        <KPICard label="Documents" value={documents.length} trend="Live" icon={<FileText />} upward />
+        <KPICard label="Storage Used" value={storageFormatted} trend="Live" icon={<BarChart3 />} upward />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -84,11 +110,13 @@ const UserAnalytics = () => {
         <div className="card p-6 space-y-6">
           <h3 className="text-lg font-bold">Popular Content</h3>
           <div className="space-y-4">
-            <PopularDoc name="HQ_Strategic_Plan.pdf" count="428" />
-            <PopularDoc name="Operational_SOP_v3" count="382" />
-            <PopularDoc name="Employee_Handbook" count="215" />
-            <PopularDoc name="Q2_Tax_Report" count="198" />
-            <PopularDoc name="Nairobi_Office_Layout" count="104" />
+            {popularDocs.length > 0 ? (
+              popularDocs.map((doc, i) => (
+                <PopularDoc key={i} name={doc.name} count={doc.count} />
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground font-bold">No access data yet. Open some documents to start tracking.</p>
+            )}
           </div>
           <button className="w-full btn bg-muted text-xs font-bold py-3 mt-4">View All Access Trends</button>
         </div>

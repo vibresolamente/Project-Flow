@@ -527,7 +527,7 @@ const CollaborationWorkspace = () => {
   const { 
     documents, groups, systemUsers, activeDocId, setActiveDocId, 
     addDocument, updateDocumentContent, createGroup, updateGroupMembers, 
-    currentUser, departments
+    currentUser, departments, recordDocRead
   } = useApp();
 
   const userName = currentUser?.name || 'Enterprise User';
@@ -549,29 +549,70 @@ const CollaborationWorkspace = () => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showCreateDocModal, setShowCreateDocModal] = useState(false);
 
+  // Real-time AI state
+  const [semanticAnalysis, setSemanticAnalysis] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const editorRef = useRef(null);
 
-  const handleAiAction = (action) => {
+  const runSemanticAudit = async () => {
     if (!editorRef.current) {
-      addToast("Active canvas not bound to AI engine");
+      if (addToast) addToast("Active canvas not bound to AI engine");
       return;
     }
     
-    addToast("AI Semantic Engine processing...");
+    const text = editorRef.current.getText();
+    if (!text || text.trim().length < 10) {
+      if (addToast) addToast("Document is too short for a meaningful audit.");
+      return;
+    }
+
+    if (addToast) addToast("AI Semantic Engine processing live data...");
+    setIsAnalyzing(true);
     
+    try {
+      const apiKey = localStorage.getItem('projectflow_openai_key'); // Provide fallback auth
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text })
+      });
+      
+      if (!response.ok) throw new Error("Analysis failed");
+      const data = await response.json();
+      setSemanticAnalysis(data);
+      if (addToast) addToast("Semantic Compliance Audit Complete");
+    } catch (err) {
+      console.error(err);
+      if (addToast) addToast("Error during semantic audit");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAiAction = async (action) => {
+    if (!editorRef.current) return;
+    
+    if (addToast) addToast("AI Semantic Engine generating content...");
+    
+    // In a full implementation, these would also be distinct Edge functions
+    // For now, we simulate the specific generation actions while using real data for the audit
     setTimeout(() => {
       if (action === 'summarize') {
         const summaryHtml = `<blockquote><strong>EXECUTIVE SUMMARY (AI GENERATED):</strong> This document outlines the strategic collaboration nodes, roles, and compliance workflows for ProjectFlow KE regional offices. It establishes communication structures and compliance governance models.</blockquote><br/>`;
         editorRef.current.chain().focus().insertContentAt(0, summaryHtml).run();
-        addToast("Executive summary injected successfully");
+        if (addToast) addToast("Executive summary injected successfully");
       } else if (action === 'polish') {
         const polishedHeader = `<p><em>✨ Syntax and readability audit completed. Structural headers validated.</em></p>`;
         editorRef.current.chain().focus().insertContent(polishedHeader).run();
-        addToast("Readability polish applied");
+        if (addToast) addToast("Readability polish applied");
       } else if (action === 'boilerplate') {
         const boilerplateHtml = `<br/><h3>SECURE COMPLIANCE GUIDELINES (v2.6)</h3><p>This node operates under the Zero-Trust Governance Framework of ProjectFlow KE. All updates are integrity-logged via SHA-256 ledger checksums. Regional data replication protocols apply.</p>`;
         editorRef.current.chain().focus().insertContent(boilerplateHtml).run();
-        addToast("Compliance clauses appended");
+        if (addToast) addToast("Compliance clauses appended");
       }
     }, 1000);
   };
@@ -634,13 +675,15 @@ const CollaborationWorkspace = () => {
 
   // --- SYNC ENGINE ---
   useEffect(() => {
-    let persistence = null;
-    let awr = null;
-    let channel = null;
-    let doc = null;
-
+    let doc, persistence, awr, channel;
     const initSync = async () => {
       try {
+        setConnStatus('connecting');
+
+        if (currentDoc?.id) {
+          recordDocRead(currentDoc.id, currentDoc.name);
+        }
+
         if (!supabase) {
           setConnStatus('error');
           addToast("Supabase is not configured. Real-time sync disabled.");
@@ -1179,37 +1222,40 @@ const CollaborationWorkspace = () => {
                              <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl">
                                 <div className="flex justify-between items-center mb-2">
                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Readability Index</span>
-                                   <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Optimal</span>
+                                   <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                     {semanticAnalysis?.readability || "Pending"}
+                                   </span>
                                 </div>
                                 <div className="flex items-baseline gap-1">
-                                   <span className="text-3xl font-black text-slate-900">84</span>
+                                   <span className="text-3xl font-black text-slate-900">{semanticAnalysis?.complianceScore || "--"}</span>
                                    <span className="text-xs text-slate-400 font-bold">/ 100</span>
                                 </div>
-                                <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-2">Clear sentence structure and professional layout detected. Suitable for distribution.</p>
+                                {isAnalyzing && <p className="text-[11px] text-emerald-500 font-medium leading-relaxed mt-2 animate-pulse">Analyzing text...</p>}
                              </div>
 
                              {/* Tone & Policy Check */}
                              <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-3">
                                 <div>
                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Audit Tone</span>
-                                   <p className="text-xs font-bold text-slate-800 mt-0.5">Formal, Authoritative & Institutional</p>
+                                   <p className="text-xs font-bold text-slate-800 mt-0.5">{semanticAnalysis?.sentiment || "Pending Analysis"}</p>
                                 </div>
                                 <hr className="border-slate-200" />
                                 <div>
                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Compliance Report</span>
                                    <div className="mt-1.5 space-y-2">
-                                      <div className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-                                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
-                                         <span>Zero-Trust Vault constraints active.</span>
-                                      </div>
-                                      <div className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-                                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
-                                         <span>Regional naming policy verified.</span>
-                                      </div>
-                                      <div className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-                                         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></div>
-                                         <span>Nairobi Port signature reference missing.</span>
-                                      </div>
+                                      {semanticAnalysis?.riskFlags && semanticAnalysis.riskFlags.length > 0 ? (
+                                        semanticAnalysis.riskFlags.map((flag, idx) => (
+                                          <div key={idx} className="flex items-start gap-2 text-xs font-semibold text-slate-700">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></div>
+                                            <span>{flag}</span>
+                                          </div>
+                                        ))
+                                      ) : (
+                                          <div className="flex items-start gap-2 text-xs font-semibold text-slate-700">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5 shrink-0"></div>
+                                            <span>No risks flagged or analysis pending.</span>
+                                          </div>
+                                      )}
                                    </div>
                                 </div>
                              </div>
@@ -1256,8 +1302,17 @@ const CollaborationWorkspace = () => {
                     )}
                 </div>
                 <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
-                   <button onClick={() => { setActiveTab('ai'); setShowRightPanel(true); addToast("AI Semantic Audit Initialized"); }} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20">
-                      <Sparkles size={16} className="text-emerald-400" /> Semantic Audit
+                   <button 
+                      onClick={() => { 
+                        setActiveTab('ai'); 
+                        setShowRightPanel(true); 
+                        runSemanticAudit(); 
+                      }} 
+                      disabled={isAnalyzing}
+                      className={`w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 ${isAnalyzing ? 'opacity-50' : ''}`}
+                    >
+                      <Sparkles size={16} className={isAnalyzing ? "text-emerald-400 animate-spin" : "text-emerald-400"} /> 
+                      {isAnalyzing ? "Analyzing..." : "Semantic Audit"}
                    </button>
                 </div>
              </motion.aside>

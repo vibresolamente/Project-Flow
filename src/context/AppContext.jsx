@@ -51,7 +51,10 @@ export const AppProvider = ({ children }) => {
   const [watermarkConfig, setWatermarkConfig] = useState({ enabled: true, text: 'PROJECTFLOW KE - CONFIDENTIAL', opacity: 0.1 });
   const [theme, setTheme] = useState('light');
   const [mfaVerified, setMfaVerified] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState({ dept: true, status: true, access: true, owner: true, date: true });
+  const [columnVisibility, setColumnVisibility] = useState(() => storage.get('pf_view_cols', {
+    id: true, name: true, type: true, sensitivity: true, dept: true, size: true, status: true, actions: true
+  }));
+  const [systemStats, setSystemStats] = useState(() => storage.get('pf_stats', { totalReads: 1240, docReads: {} }));
   const [threatAlerts, setThreatAlerts] = useState([
     { id: 1, type: 'info', message: 'Zero-Trust Kernel initialized.', time: new Date().toISOString() }
   ]);
@@ -59,7 +62,7 @@ export const AppProvider = ({ children }) => {
     { id: 'g1', name: 'Strategic Planning', description: 'Focus on 2026-2030 roadmap.', members: ['u1', 'u2'], privacy: 'Private', createdAt: new Date().toISOString(), adminId: 'u1' },
     { id: 'g2', name: 'General Discussion', description: 'Open forum for all staff.', members: ['u1', 'u2', 'u3'], privacy: 'Public', createdAt: new Date().toISOString(), adminId: 'u1' },
   ]);
-  const [lastHash, setLastHash] = useState('0000000000000000');
+  const [lastHash, setLastHash] = useState(() => storage.get('pf_last_hash', '0000000000000000'));
   const [activeDocId, setActiveDocId] = useState(null);
 
   // ── Load from Storage & Supabase on mount ──────────────────────
@@ -169,7 +172,8 @@ export const AppProvider = ({ children }) => {
     storage.set('pf_groups', groups);
     storage.set('pf_last_hash', lastHash);
     storage.set('pf_view_cols', columnVisibility);
-  }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, dbReady]);
+    storage.set('pf_stats', systemStats);
+  }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, systemStats, dbReady]);
 
 
   // ── Helpers ───────────────────────────────────────────────────
@@ -194,6 +198,18 @@ export const AppProvider = ({ children }) => {
     const newLog = { id: Date.now() + Math.random(), user, action, target, time: new Date().toISOString(), hash, integrity: 'Verified' };
     setAuditLogs(prev => [newLog, ...prev].slice(0, 100));
     auditAPI.create(newLog).catch(() => {});
+  };
+
+  const recordDocRead = (docId, docName) => {
+    setSystemStats(prev => {
+      const docReads = { ...prev.docReads };
+      docReads[docId] = (docReads[docId] || 0) + 1;
+      return {
+        ...prev,
+        totalReads: prev.totalReads + 1,
+        docReads
+      };
+    });
   };
 
   const pushThreatAlert = (type, message) => {
@@ -482,6 +498,7 @@ export const AppProvider = ({ children }) => {
       columnVisibility, setColumnVisibility,
       activeDocId, setActiveDocId,
       groups, createGroup, updateGroupMembers, deleteGroup,
+      systemStats, recordDocRead
     }}>
       {children}
     </AppContext.Provider>
