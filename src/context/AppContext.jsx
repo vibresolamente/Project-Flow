@@ -44,6 +44,9 @@ export const AppProvider = ({ children }) => {
     { id: 'u4', name: 'Guest Contractor', role: 'Restricted', departments: [], pin: '9999' }
   ]);
   const [currentUser, setCurrentUser] = useState(null);
+const userName = currentUser?.name || '';
+const userRole = currentUser?.role || null;
+
   const [auditLogs, setAuditLogs] = useState([
     { id: Date.now(), user: 'System', action: 'IAM Boot', target: 'Zero Trust Kernel', time: new Date().toISOString() },
   ]);
