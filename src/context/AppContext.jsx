@@ -44,8 +44,8 @@ export const AppProvider = ({ children }) => {
     { id: 'u4', name: 'Guest Contractor', role: 'Restricted', departments: [], pin: '9999' }
   ]);
   const [currentUser, setCurrentUser] = useState(null);
-const userName = currentUser?.name || '';
-const userRole = currentUser?.role || null;
+  const [userRole, setUserRole] = useState(null);
+  const userName = currentUser?.name || '';
 
   const [auditLogs, setAuditLogs] = useState([
     { id: Date.now(), user: 'System', action: 'IAM Boot', target: 'Zero Trust Kernel', time: new Date().toISOString() },
@@ -130,7 +130,10 @@ const userRole = currentUser?.role || null;
       if (savedUsers) setSystemUsers(savedUsers);
 
       const savedCurrentUser = await storage.get('pf_current_user');
-      if (savedCurrentUser) setCurrentUser(savedCurrentUser);
+      if (savedCurrentUser) {
+        setCurrentUser(savedCurrentUser);
+        setUserRole(savedCurrentUser?.role || null);
+      }
 
       const savedLogs = await storage.get('pf_logs');
       if (savedLogs) setAuditLogs(savedLogs);
@@ -143,6 +146,8 @@ const userRole = currentUser?.role || null;
 
       const savedTheme = await storage.get('pf_theme');
       if (savedTheme) setTheme(savedTheme);
+
+
 
       const savedThreats = await storage.get('pf_threats');
       if (savedThreats) setThreatAlerts(savedThreats);
@@ -170,12 +175,17 @@ const userRole = currentUser?.role || null;
   // ── Persist to Storage ─────────────────────────────────────────
   useEffect(() => {
     if (!dbReady) return;
+    // Sync role when currentUser changes
+    if (currentUser?.role && currentUser.role !== userRole) {
+      setUserRole(currentUser.role);
+    }
 
     storage.set('pf_docs', documents);
     storage.set('pf_recycle', recycleBin);
     storage.set('pf_logs', auditLogs);
     storage.set('pf_users', systemUsers);
     storage.set('pf_current_user', currentUser);
+    storage.set('pf_user_role', userRole);
     storage.set('pf_requests', pendingRequests);
     storage.set('pf_approvals', pendingApprovals);
     storage.set('pf_notifications', notifications);
@@ -188,7 +198,7 @@ const userRole = currentUser?.role || null;
     storage.set('pf_last_hash', lastHash);
     storage.set('pf_view_cols', columnVisibility);
     storage.set('pf_stats', systemStats);
-  }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, systemStats, dbReady]);
+  }, [documents, recycleBin, auditLogs, systemUsers, currentUser, userRole, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, systemStats, dbReady]);
 
   const logAction = (user, action, target) => {
     const newLog = { id: Date.now() + Math.random(), user, action, target, time: new Date().toISOString(), integrity: 'Verified' };
@@ -469,9 +479,9 @@ const userRole = currentUser?.role || null;
       dbReady, isDbConfigured, isCloudOffline, dbStatus, refreshDatabaseData,
 
       systemUsers, currentUser, setCurrentUser,
-      setUserRole: (role) => setCurrentUser(prev => prev ? { ...prev, role } : null),
-      userRole, userName,
+      setUserRole, userRole, userName,
       registerNewUser, updateUser, deleteUser, updateUserGroups,
+
 
       documents, recycleBin,
       pendingApprovals, pendingApprovalCount, pendingRequests,

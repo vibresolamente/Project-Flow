@@ -102,7 +102,7 @@ const GovernanceCenter = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={handleExportCSV} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
+          <button onClick={handleExportCSV} className="px-4 py-2 bg-white border border-slate-200 text-black rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
             Export CSV
           </button>
           <button onClick={handleExportPDF} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-all flex items-center gap-1.5 shadow-md shadow-slate-900/10">
