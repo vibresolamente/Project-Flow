@@ -13,22 +13,22 @@ const AppContext = createContext();
 export const AppProvider = ({ children }) => {
   // ── Seed Data ────────────────────────────────────────────────
   const initialDocs = [
-    { id: '1', name: 'Finance_Report_Q1_2026.pdf',   dept: 'Finance', status: 'approved',    access: 'Public',        date: '2026-04-20', owner: 'System Admin',   sensitivity: 'Public',       version: 3, content: 'REGIONAL FINANCE SUMMARY - Q1 2026\nRevenue: KES 4.2B\nGrowth: +12% YoY\nStatus: Verified by Central Audit.' },
-    { id: '2', name: 'Confidential_M&A_Log.xlsx',    dept: 'Legal',   status: 'confidential', access: 'Restricted',    date: '2026-04-18', owner: 'David Ochieng',  sensitivity: 'Restricted',   version: 1, hasLock: true, content: 'M&A TRANSACTION LOG [ENCRYPTED]\nTarget: Coastal Logistics Ltd\nStatus: Due Diligence Phase\nRisk: High' },
-    { id: '3', name: 'HR_Policy_Handbook_2026.docx', dept: 'HR',      status: 'review',       access: 'Internal Only', date: '2026-04-19', owner: 'Sarah Manager',  sensitivity: 'Internal',     version: 2, content: 'STANDARD OPERATING PROCEDURES 2026\n1. Leave Policy\n2. Health Insurance\n3. Disciplinary Framework' },
-    { id: '4', name: 'Ops_Manual_Nairobi_v4.pdf',    dept: 'Ops',     status: 'draft',        access: 'Internal Only', date: '2026-04-21', owner: 'Kevin Otieno',   sensitivity: 'Internal',     version: 1, content: 'NAIROBI BRANCH OPERATIONS GUIDE\nGrid maintenance schedule... (STAGING)' },
-    { id: '5', name: 'Legal_NDA_Mombasa_Branch.pdf', dept: 'Legal',   status: 'approved',     access: 'Legal Only',    date: '2026-04-17', owner: 'Sarah Kamau',    sensitivity: 'Confidential', version: 4, content: 'NON-DISCLOSURE AGREEMENT\nParties: ProjectFlow KE & Mombasa Port Auth\nTerms: 5 Years Confidentiality' },
+    { id: '1', name: 'Finance_Report_Q1_2026.pdf', dept: 'Finance', status: 'approved', access: 'Public', date: '2026-04-20', owner: 'System Admin', sensitivity: 'Public', version: 3, content: 'REGIONAL FINANCE SUMMARY - Q1 2026\nRevenue: KES 4.2B\nGrowth: +12% YoY\nStatus: Verified by Central Audit.' },
+    { id: '2', name: 'Confidential_M&A_Log.xlsx', dept: 'Legal', status: 'confidential', access: 'Restricted', date: '2026-04-18', owner: 'David Ochieng', sensitivity: 'Restricted', version: 1, hasLock: true, content: 'M&A TRANSACTION LOG [ENCRYPTED]\nTarget: Coastal Logistics Ltd\nStatus: Due Diligence Phase\nRisk: High' },
+    { id: '3', name: 'HR_Policy_Handbook_2026.docx', dept: 'HR', status: 'review', access: 'Internal Only', date: '2026-04-19', owner: 'Sarah Manager', sensitivity: 'Internal', version: 2, content: 'STANDARD OPERATING PROCEDURES 2026\n1. Leave Policy\n2. Health Insurance\n3. Disciplinary Framework' },
+    { id: '4', name: 'Ops_Manual_Nairobi_v4.pdf', dept: 'Ops', status: 'draft', access: 'Internal Only', date: '2026-04-21', owner: 'Kevin Otieno', sensitivity: 'Internal', version: 1, content: 'NAIROBI BRANCH OPERATIONS GUIDE\nGrid maintenance schedule... (STAGING)' },
+    { id: '5', name: 'Legal_NDA_Mombasa_Branch.pdf', dept: 'Legal', status: 'approved', access: 'Legal Only', date: '2026-04-17', owner: 'Sarah Kamau', sensitivity: 'Confidential', version: 4, content: 'NON-DISCLOSURE AGREEMENT\nParties: ProjectFlow KE & Mombasa Port Auth\nTerms: 5 Years Confidentiality' },
   ];
   const initialNotifications = [
     { id: 'n1', type: 'approval', message: 'HR_Policy_Handbook_2026.docx is awaiting your approval.', time: new Date(Date.now() - 120000).toISOString(), read: false, docId: '3' },
-    { id: 'n2', type: 'access',   message: 'Kevin Otieno requested access to Legal Contracts library.', time: new Date(Date.now() - 3600000).toISOString(), read: false },
-    { id: 'n3', type: 'system',   message: 'Auto-archive scheduled for 12 documents expiring this month.', time: new Date(Date.now() - 7200000).toISOString(), read: true },
+    { id: 'n2', type: 'access', message: 'Kevin Otieno requested access to Legal Contracts library.', time: new Date(Date.now() - 3600000).toISOString(), read: false },
+    { id: 'n3', type: 'system', message: 'Auto-archive scheduled for 12 documents expiring this month.', time: new Date(Date.now() - 7200000).toISOString(), read: true },
   ];
 
   // ── State ─────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('portal');
-  const [dbReady,   setDbReady]   = useState(false);
-  const [dbStatus,  setDbStatus]  = useState({ connected: false, latencyMs: 0, statusText: 'Checking...' });
+  const [dbReady, setDbReady] = useState(false);
+  const [dbStatus, setDbStatus] = useState({ connected: false, latencyMs: 0, statusText: 'Checking...' });
 
   const [documents, setDocuments] = useState(initialDocs);
   const [recycleBin, setRecycleBin] = useState([]);
@@ -38,204 +38,10 @@ export const AppProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [systemUsers, setSystemUsers] = useState([
-    { id: 'u1', name: 'System Admin',     role: 'Admin',      departments: ['Finance', 'Legal', 'HR', 'Ops', 'IT'], pin: '0000' },
-    { id: 'u2', name: 'Sarah Manager',    role: 'Manager',    departments: ['Finance', 'HR'],                       pin: '1234' },
-    { id: 'u3', name: 'Kevin Staff',      role: 'Staff',      departments: ['Ops'],                                 pin: '4321' },
-    { id: 'u4', name: 'Guest Contractor', role: 'Restricted', departments: [],                                      pin: '9999' }
-  ]);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [auditLogs, setAuditLogs] = useState([
-    { id: Date.now(), user: 'System', action: 'IAM Boot', target: 'Zero Trust Kernel', time: new Date().toISOString() },
-  ]);
-  const [sharedContent, setSharedContent] = useState('This document outlines the collaborative protocols for the ProjectFlow KE initiative...');
-  const [departments, setDepartments] = useState(['Finance', 'Legal', 'HR', 'Ops', 'IT']);
-  const [watermarkConfig, setWatermarkConfig] = useState({ enabled: true, text: 'PROJECTFLOW KE - CONFIDENTIAL', opacity: 0.1 });
-  const [theme, setTheme] = useState('light');
-  const [mfaVerified, setMfaVerified] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState({
-    id: true, name: true, type: true, sensitivity: true, dept: true, size: true, status: true, actions: true
-  });
-  const [systemStats, setSystemStats] = useState({ totalReads: 1240, docReads: {} });
-  const [threatAlerts, setThreatAlerts] = useState([
-    { id: 1, type: 'info', message: 'Zero-Trust Kernel initialized.', time: new Date().toISOString() }
-  ]);
-  const [groups, setGroups] = useState([
-    { id: 'g1', name: 'Strategic Planning', description: 'Focus on 2026-2030 roadmap.', members: ['u1', 'u2'], privacy: 'Private', createdAt: new Date().toISOString(), adminId: 'u1' },
-    { id: 'g2', name: 'General Discussion', description: 'Open forum for all staff.', members: ['u1', 'u2', 'u3'], privacy: 'Public', createdAt: new Date().toISOString(), adminId: 'u1' },
-  ]);
-  const [lastHash, setLastHash] = useState('0000000000000000');
-  const [activeDocId, setActiveDocId] = useState(null);
-
-  // ── Database Sync Helper ──────────────────────────────────────
-  const refreshDatabaseData = async () => {
-    const health = await checkSupabaseHealth();
-    setDbStatus(health);
-    if (health.connected) {
-      try {
-        const data = await loadAllFromDB();
-        if (data) {
-          const { docs, users, logs, notifications: notifs, departments: depts, approvals, requests, threats, groups: grps } = data;
-          if (docs?.length) {
-            setDocuments(docs.filter(d => !d.deletedAt));
-            const bin = docs.filter(d => d.deletedAt);
-            if (bin.length) setRecycleBin(bin);
-          }
-          if (users?.length) setSystemUsers(users);
-          if (logs?.length) setAuditLogs(logs);
-          if (notifs?.length) setNotifications(notifs);
-          if (depts?.length) setDepartments(depts);
-          if (approvals?.length) setPendingApprovals(approvals);
-          if (requests?.length) setPendingRequests(requests);
-          if (threats?.length) setThreatAlerts(threats);
-          if (grps?.length) setGroups(grps.map(g => ({
-            id: g.id,
-            name: g.name,
-            description: g.description,
-            privacy: g.privacy,
-            members: g.members || [],
-            adminId: g.admin_id,
-            createdAt: g.created_at
-          })));
-        }
-      } catch (err) {
-        console.warn('[DB] Sync error:', err);
-      }
-    }
-    return health;
-  };
-
-  // ── Load from Storage & Supabase on mount ──────────────────────
-  useEffect(() => {
-    const bootstrap = async () => {
-      // 1. Load from Persistent Storage (IDB)
-      const savedDocs = await storage.get('pf_docs');
-      if (savedDocs) setDocuments(savedDocs);
-
-      const savedRecycle = await storage.get('pf_recycle');
-      if (savedRecycle) setRecycleBin(savedRecycle);
-
-      const savedApprovals = await storage.get('pf_approvals');
-      if (savedApprovals) setPendingApprovals(savedApprovals);
-
-  const userName = currentUser?.name || 'System';
-
-  const generateHash = (data) => {
-    const str = JSON.stringify(data) + lastHash;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    const hex = Math.abs(hash).toString(16).padStart(16, '0');
-    setLastHash(hex);
-    return hex;
-  };
-
-  const logAction = (user, action, target) => {
-    const hash = generateHash({ user, action, target, time: new Date().toISOString() });
-    const newLog = { id: Date.now() + Math.random(), user, action, target, time: new Date().toISOString(), hash, integrity: 'Verified' };
-    setAuditLogs(prev => [newLog, ...prev].slice(0, 100));
-    auditAPI.create(newLog).catch(() => {});
-  };
-
-  const recordDocRead = (docId, docName) => {
-    setSystemStats(prev => {
-      const docReads = { ...prev.docReads };
-      docReads[docId] = (docReads[docId] || 0) + 1;
-      return {
-        ...prev,
-        totalReads: prev.totalReads + 1,
-        docReads
-      };
-    });
-  };
-
-  const pushThreatAlert = (type, message) => {
-    const alert = { id: Date.now(), type, message, time: new Date().toISOString() };
-    setThreatAlerts(prev => [alert, ...prev].slice(0, 10));
-    threatsAPI.create(alert).catch(() => {});
-    pushNotification('system', `⚠️ SECURITY ALERT: ${message}`);
-  };
-
-  const pushNotification = (type, message, docId = null) => {
-    const n = { id: `n${Date.now()}`, type, message, time: new Date().toISOString(), read: false, docId };
-    setNotifications(prev => [n, ...prev].slice(0, 30));
-    notificationsAPI.create(n).catch(() => {});
-  };
-
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationsAPI.markAllRead().catch(() => {});
-  };
-
-  // ── Document Actions ──────────────────────────────────────────
-  const addDocument = (doc) => {
-    const newDoc = { ...doc, id: doc.id || Date.now().toString(), status: 'approved', date: new Date().toISOString().split('T')[0], version: 1, owner: userName, sensitivity: doc.sensitivity || 'Internal' };
-    setDocuments(prev => [newDoc, ...prev]);
-    documentsAPI.upsert(newDoc).catch(() => {});
-    logAction(userName, 'Uploaded', newDoc.name);
-    pushNotification('system', `${newDoc.name} uploaded to ${newDoc.dept} library.`);
-  };
-
-  const transferDocument = (docId, newOwner) => {
-    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, owner: newOwner } : d));
-    documentsAPI.update(docId, { owner: newOwner }).catch(() => {});
-  };
-
-  const updateDocumentVaultStatus = (docId, vaultPassword) => {
-    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, vaultLocked: true, vaultPassword, hasLock: true } : d));
-    documentsAPI.update(docId, { vaultLocked: true, vaultPassword, hasLock: true }).catch(() => {});
-    const targetDoc = documents.find(d => d.id === docId);
-    logAction(userName, 'Vault Lock Applied', targetDoc?.name);
-  };
-
-  const updateDocumentContent = (docId, newContent) => {
-    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, content: newContent, version: (d.version || 1) + 1 } : d));
-    const targetDoc = documents.find(d => d.id === docId);
-    documentsAPI.update(docId, { content: newContent, version: (targetDoc?.version || 1) + 1 }).catch(() => {});
-    logAction(userName, 'Updated Content', targetDoc?.name);
-  };
-
-  const deleteDocument = (id) => {
-    const doc = documents.find(d => d.id === id);
-    if (doc) {
-      const deletedDoc = { ...doc, deletedAt: new Date().toISOString() };
-      setDocuments(prev => prev.filter(d => d.id !== id));
-      setRecycleBin(prev => [...prev, deletedDoc]);
-      documentsAPI.update(id, { deletedAt: deletedDoc.deletedAt }).catch(() => {});
-      logAction(userName, 'Deleted → Recycle Bin', doc.name);
-    }
-  };
-
-  const restoreDocument = (id) => {
-    const doc = recycleBin.find(d => d.id === id);
-    if (doc) {
-      setRecycleBin(prev => prev.filter(d => d.id !== id));
-      setDocuments(prev => [{ ...doc, deletedAt: undefined }, ...prev]);
-      documentsAPI.update(id, { deletedAt: null }).catch(() => {});
-      logAction(userName, 'Restored from Recycle Bin', doc.name);
-      pushNotification('system', `${doc.name} has been restored to the ${doc.dept} library.`);
-    }
-  };
-
-  // ── State ─────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState('portal');
-  const [dbReady,   setDbReady]   = useState(false);
-  const [dbStatus,  setDbStatus]  = useState({ connected: false, latencyMs: 0, statusText: 'Checking...' });
-
-  const [documents, setDocuments] = useState(initialDocs);
-  const [recycleBin, setRecycleBin] = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState([
-    { id: 'a1', docId: '3', docName: 'HR_Policy_Handbook_2026.docx', submittedBy: 'Grace Njeri', dept: 'HR', time: new Date(Date.now() - 120000).toISOString(), status: 'Pending' }
-  ]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [notifications, setNotifications] = useState(initialNotifications);
-  const [systemUsers, setSystemUsers] = useState([
-    { id: 'u1', name: 'System Admin',     role: 'Admin',      departments: ['Finance', 'Legal', 'HR', 'Ops', 'IT'], pin: '0000' },
-    { id: 'u2', name: 'Sarah Manager',    role: 'Manager',    departments: ['Finance', 'HR'],                       pin: '1234' },
-    { id: 'u3', name: 'Kevin Staff',      role: 'Staff',      departments: ['Ops'],                                 pin: '4321' },
-    { id: 'u4', name: 'Guest Contractor', role: 'Restricted', departments: [],                                      pin: '9999' }
+    { id: 'u1', name: 'System Admin', role: 'Admin', departments: ['Finance', 'Legal', 'HR', 'Ops', 'IT'], pin: '0000' },
+    { id: 'u2', name: 'Sarah Manager', role: 'Manager', departments: ['Finance', 'HR'], pin: '1234' },
+    { id: 'u3', name: 'Kevin Staff', role: 'Staff', departments: ['Ops'], pin: '4321' },
+    { id: 'u4', name: 'Guest Contractor', role: 'Restricted', departments: [], pin: '9999' }
   ]);
   const [currentUser, setCurrentUser] = useState(null);
   const [auditLogs, setAuditLogs] = useState([
@@ -381,99 +187,10 @@ export const AppProvider = ({ children }) => {
     storage.set('pf_stats', systemStats);
   }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, systemStats, dbReady]);
 
-      const savedRequests = await storage.get('pf_requests');
-      if (savedRequests) setPendingRequests(savedRequests);
-
-      const savedNotifs = await storage.get('pf_notifications');
-      if (savedNotifs) setNotifications(savedNotifs);
-
-      const savedUsers = await storage.get('pf_users');
-      if (savedUsers) setSystemUsers(savedUsers);
-
-      const savedCurrentUser = await storage.get('pf_current_user');
-      if (savedCurrentUser) setCurrentUser(savedCurrentUser);
-
-      const savedLogs = await storage.get('pf_logs');
-      if (savedLogs) setAuditLogs(savedLogs);
-
-      const savedDepts = await storage.get('pf_depts');
-      if (savedDepts) setDepartments(savedDepts);
-
-      const savedWatermark = await storage.get('pf_watermark');
-      if (savedWatermark) setWatermarkConfig(savedWatermark);
-
-      const savedTheme = await storage.get('pf_theme');
-      if (savedTheme) setTheme(savedTheme);
-
-      const savedThreats = await storage.get('pf_threats');
-      if (savedThreats) setThreatAlerts(savedThreats);
-
-      const savedGroups = await storage.get('pf_groups');
-      if (savedGroups) setGroups(savedGroups);
-
-      const savedLastHash = await storage.get('pf_last_hash');
-      if (savedLastHash) setLastHash(savedLastHash);
-
-      const savedCols = await storage.get('pf_view_cols');
-      if (savedCols) setColumnVisibility(savedCols);
-
-      const savedStats = await storage.get('pf_stats');
-      if (savedStats) setSystemStats(savedStats);
-
-      // 2. Sync from Supabase
-      await refreshDatabaseData();
-      setDbReady(true);
-    };
-
-    bootstrap();
-  }, []);
-
-  // ── Persist to Storage ─────────────────────────────────────────
-  useEffect(() => {
-    if (!dbReady) return;
-
-    storage.set('pf_docs', documents);
-    storage.set('pf_recycle', recycleBin);
-    storage.set('pf_logs', auditLogs);
-    storage.set('pf_users', systemUsers);
-    storage.set('pf_current_user', currentUser);
-    storage.set('pf_requests', pendingRequests);
-    storage.set('pf_approvals', pendingApprovals);
-    storage.set('pf_notifications', notifications);
-    storage.set('pf_shared_content', sharedContent);
-    storage.set('pf_depts', departments);
-    storage.set('pf_watermark', watermarkConfig);
-    storage.set('pf_theme', theme);
-    storage.set('pf_threats', threatAlerts);
-    storage.set('pf_groups', groups);
-    storage.set('pf_last_hash', lastHash);
-    storage.set('pf_view_cols', columnVisibility);
-    storage.set('pf_stats', systemStats);
-  }, [documents, recycleBin, auditLogs, systemUsers, currentUser, pendingRequests, pendingApprovals, notifications, sharedContent, departments, watermarkConfig, theme, threatAlerts, lastHash, columnVisibility, systemStats, dbReady]);
-
-
-  // ── Helpers ───────────────────────────────────────────────────
-  const userRole = currentUser?.role || 'Guest';
-  const userName = currentUser?.name || 'System';
-
-  const generateHash = (data) => {
-    const str = JSON.stringify(data) + lastHash;
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    const hex = Math.abs(hash).toString(16).padStart(16, '0');
-    setLastHash(hex);
-    return hex;
-  };
-
   const logAction = (user, action, target) => {
-    const hash = generateHash({ user, action, target, time: new Date().toISOString() });
-    const newLog = { id: Date.now() + Math.random(), user, action, target, time: new Date().toISOString(), hash, integrity: 'Verified' };
+    const newLog = { id: Date.now() + Math.random(), user, action, target, time: new Date().toISOString(), integrity: 'Verified' };
     setAuditLogs(prev => [newLog, ...prev].slice(0, 100));
-    auditAPI.create(newLog).catch(() => {});
+    auditAPI.create(newLog).catch(() => { });
   };
 
   const recordDocRead = (docId, docName) => {
@@ -491,38 +208,38 @@ export const AppProvider = ({ children }) => {
   const pushThreatAlert = (type, message) => {
     const alert = { id: Date.now(), type, message, time: new Date().toISOString() };
     setThreatAlerts(prev => [alert, ...prev].slice(0, 10));
-    threatsAPI.create(alert).catch(() => {});
+    threatsAPI.create(alert).catch(() => { });
     pushNotification('system', `⚠️ SECURITY ALERT: ${message}`);
   };
 
   const pushNotification = (type, message, docId = null) => {
     const n = { id: `n${Date.now()}`, type, message, time: new Date().toISOString(), read: false, docId };
     setNotifications(prev => [n, ...prev].slice(0, 30));
-    notificationsAPI.create(n).catch(() => {});
+    notificationsAPI.create(n).catch(() => { });
   };
 
   const markAllRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationsAPI.markAllRead().catch(() => {});
+    notificationsAPI.markAllRead().catch(() => { });
   };
 
   // ── Document Actions ──────────────────────────────────────────
   const addDocument = (doc) => {
     const newDoc = { ...doc, id: doc.id || Date.now().toString(), status: 'approved', date: new Date().toISOString().split('T')[0], version: 1, owner: userName, sensitivity: doc.sensitivity || 'Internal' };
     setDocuments(prev => [newDoc, ...prev]);
-    documentsAPI.upsert(newDoc).catch(() => {});
+    documentsAPI.upsert(newDoc).catch(() => { });
     logAction(userName, 'Uploaded', newDoc.name);
     pushNotification('system', `${newDoc.name} uploaded to ${newDoc.dept} library.`);
   };
 
   const transferDocument = (docId, newOwner) => {
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, owner: newOwner } : d));
-    documentsAPI.update(docId, { owner: newOwner }).catch(() => {});
+    documentsAPI.update(docId, { owner: newOwner }).catch(() => { });
   };
 
   const updateDocumentVaultStatus = (docId, vaultPassword) => {
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, vaultLocked: true, vaultPassword, hasLock: true } : d));
-    documentsAPI.update(docId, { vaultLocked: true, vaultPassword, hasLock: true }).catch(() => {});
+    documentsAPI.update(docId, { vaultLocked: true, vaultPassword, hasLock: true }).catch(() => { });
     const targetDoc = documents.find(d => d.id === docId);
     logAction(userName, 'Vault Lock Applied', targetDoc?.name);
   };
@@ -530,7 +247,7 @@ export const AppProvider = ({ children }) => {
   const updateDocumentContent = (docId, newContent) => {
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, content: newContent, version: (d.version || 1) + 1 } : d));
     const targetDoc = documents.find(d => d.id === docId);
-    documentsAPI.update(docId, { content: newContent, version: (targetDoc?.version || 1) + 1 }).catch(() => {});
+    documentsAPI.update(docId, { content: newContent, version: (targetDoc?.version || 1) + 1 }).catch(() => { });
     logAction(userName, 'Updated Content', targetDoc?.name);
   };
 
@@ -540,7 +257,7 @@ export const AppProvider = ({ children }) => {
       const deletedDoc = { ...doc, deletedAt: new Date().toISOString() };
       setDocuments(prev => prev.filter(d => d.id !== id));
       setRecycleBin(prev => [...prev, deletedDoc]);
-      documentsAPI.update(id, { deletedAt: deletedDoc.deletedAt }).catch(() => {});
+      documentsAPI.update(id, { deletedAt: deletedDoc.deletedAt }).catch(() => { });
       logAction(userName, 'Deleted → Recycle Bin', doc.name);
     }
   };
@@ -550,7 +267,7 @@ export const AppProvider = ({ children }) => {
     if (doc) {
       setRecycleBin(prev => prev.filter(d => d.id !== id));
       setDocuments(prev => [{ ...doc, deletedAt: undefined }, ...prev]);
-      documentsAPI.update(id, { deletedAt: null }).catch(() => {});
+      documentsAPI.update(id, { deletedAt: null }).catch(() => { });
       logAction(userName, 'Restored from Recycle Bin', doc.name);
       pushNotification('system', `${doc.name} has been restored to the ${doc.dept} library.`);
     }
@@ -560,25 +277,25 @@ export const AppProvider = ({ children }) => {
   const registerNewUser = (userProfile) => {
     const newUser = { id: `u${Date.now()}`, ...userProfile };
     setSystemUsers(prev => [...prev, newUser]);
-    usersAPI.upsert(newUser).catch(() => {});
+    usersAPI.upsert(newUser).catch(() => { });
     logAction(userName, 'Created New User Identity', newUser.name);
   };
 
   const updateUser = (userId, updates) => {
     setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
-    usersAPI.update(userId, updates).catch(() => {});
+    usersAPI.update(userId, updates).catch(() => { });
     logAction(userName, 'Updated User Identity', userId);
   };
 
   const deleteUser = (userId) => {
     setSystemUsers(prev => prev.filter(u => u.id !== userId));
-    usersAPI.delete(userId).catch(() => {});
+    usersAPI.delete(userId).catch(() => { });
     logAction(userName, 'Deleted User Identity', userId);
   };
 
   const updateUserGroups = (userId, depts) => {
     setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, departments: depts } : u));
-    usersAPI.update(userId, { departments: depts }).catch(() => {});
+    usersAPI.update(userId, { departments: depts }).catch(() => { });
     logAction(userName, 'Modified Identity Groups', userId);
   };
 
@@ -586,20 +303,20 @@ export const AppProvider = ({ children }) => {
   const addDepartment = (name) => {
     if (departments.includes(name)) return;
     setDepartments(prev => [...prev, name]);
-    departmentsAPI.create(name).catch(() => {});
+    departmentsAPI.create(name).catch(() => { });
     logAction(userName, 'Created Department', name);
   };
 
   const updateDepartment = (oldName, newName) => {
     setDepartments(prev => prev.map(d => d === oldName ? newName : d));
     setDocuments(prev => prev.map(doc => doc.dept === oldName ? { ...doc, dept: newName } : doc));
-    departmentsAPI.rename(oldName, newName).catch(() => {});
+    departmentsAPI.rename(oldName, newName).catch(() => { });
     logAction(userName, 'Renamed Department', `${oldName} → ${newName}`);
   };
 
   const deleteDepartment = (name) => {
     setDepartments(prev => prev.filter(d => d !== name));
-    departmentsAPI.delete(name).catch(() => {});
+    departmentsAPI.delete(name).catch(() => { });
     logAction(userName, 'Deleted Department', name);
   };
 
@@ -610,10 +327,10 @@ export const AppProvider = ({ children }) => {
     const doc = optionalDoc || documents.find(d => d.id === docId);
     if (!doc) return;
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'review' } : d));
-    documentsAPI.update(docId, { status: 'review' }).catch(() => {});
+    documentsAPI.update(docId, { status: 'review' }).catch(() => { });
     const approval = { id: `a${Date.now()}`, docId, docName: doc.name, submittedBy: userName, dept: doc.dept, time: new Date().toISOString(), status: 'Pending' };
     setPendingApprovals(prev => [approval, ...prev]);
-    approvalsAPI.create(approval).catch(() => {});
+    approvalsAPI.create(approval).catch(() => { });
     logAction(userName, 'Submitted for Approval', doc.name);
     pushNotification('approval', `${doc.name} submitted for Manager approval. Workflow triggered.`, docId);
   };
@@ -623,9 +340,9 @@ export const AppProvider = ({ children }) => {
     if (!approval) return;
     const resolvedAt = new Date().toISOString();
     setPendingApprovals(prev => prev.map(a => a.id === approvalId ? { ...a, status: 'Approved', resolvedAt } : a));
-    approvalsAPI.update(approvalId, { status: 'Approved', resolvedAt }).catch(() => {});
+    approvalsAPI.update(approvalId, { status: 'Approved', resolvedAt }).catch(() => { });
     setDocuments(prev => prev.map(d => d.id === approval.docId ? { ...d, status: 'approved', version: (d.version || 1) + 1 } : d));
-    documentsAPI.update(approval.docId, { status: 'approved' }).catch(() => {});
+    documentsAPI.update(approval.docId, { status: 'approved' }).catch(() => { });
     logAction(userName, 'Approved', approval.docName);
     pushNotification('approval', `✅ ${approval.docName} has been approved and is now live.`, approval.docId);
   };
@@ -635,9 +352,9 @@ export const AppProvider = ({ children }) => {
     if (!approval) return;
     const resolvedAt = new Date().toISOString();
     setPendingApprovals(prev => prev.map(a => a.id === approvalId ? { ...a, status: 'Rejected', resolvedAt, reason } : a));
-    approvalsAPI.update(approvalId, { status: 'Rejected', resolvedAt, reason }).catch(() => {});
+    approvalsAPI.update(approvalId, { status: 'Rejected', resolvedAt, reason }).catch(() => { });
     setDocuments(prev => prev.map(d => d.id === approval.docId ? { ...d, status: 'draft' } : d));
-    documentsAPI.update(approval.docId, { status: 'draft' }).catch(() => {});
+    documentsAPI.update(approval.docId, { status: 'draft' }).catch(() => { });
     logAction(userName, 'Rejected', approval.docName);
     pushNotification('approval', `❌ ${approval.docName} was rejected. Reason: ${reason}. Returned to Draft.`, approval.docId);
   };
@@ -648,7 +365,7 @@ export const AppProvider = ({ children }) => {
     const signature = `PF-SIG-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
     const certifiedAt = new Date().toISOString();
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'certified', signature, certifiedBy: userName, certifiedAt } : d));
-    documentsAPI.update(docId, { status: 'certified', signature, certifiedBy: userName, certifiedAt }).catch(() => {});
+    documentsAPI.update(docId, { status: 'certified', signature, certifiedBy: userName, certifiedAt }).catch(() => { });
     logAction(userName, 'Applied Digital Signature', doc.name);
     pushNotification('system', `🔏 ${doc.name} has been Digitally Certified. Signature: ${signature}`);
   };
@@ -657,7 +374,7 @@ export const AppProvider = ({ children }) => {
     const doc = documents.find(d => d.id === docId);
     if (doc) {
       setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'archived' } : d));
-      documentsAPI.update(docId, { status: 'archived' }).catch(() => {});
+      documentsAPI.update(docId, { status: 'archived' }).catch(() => { });
       logAction(userName, 'Archived', doc.name);
       pushNotification('system', `${doc.name} has been archived. Access preserved for audit.`);
     }
@@ -667,7 +384,7 @@ export const AppProvider = ({ children }) => {
   const requestAccess = (resource, justification) => {
     const newRequest = { id: Date.now(), resource, justification, status: 'Pending', requestedBy: userName, time: new Date().toISOString() };
     setPendingRequests(prev => [newRequest, ...prev]);
-    requestsAPI.create(newRequest).catch(() => {});
+    requestsAPI.create(newRequest).catch(() => { });
     logAction(userName, 'Requested Access', resource);
     pushNotification('access', `Access requested for ${resource}. Pending manager review.`);
   };
@@ -675,7 +392,7 @@ export const AppProvider = ({ children }) => {
   const approveRequest = (requestId) => {
     const resolvedAt = new Date().toISOString();
     setPendingRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: 'Approved', resolvedAt } : r));
-    requestsAPI.update(requestId, { status: 'Approved', resolvedAt }).catch(() => {});
+    requestsAPI.update(requestId, { status: 'Approved', resolvedAt }).catch(() => { });
     const req = pendingRequests.find(r => r.id === requestId);
     if (req) {
       const requestingUser = systemUsers.find(u => u.name === req.requestedBy);
@@ -691,7 +408,7 @@ export const AppProvider = ({ children }) => {
   const rejectAccessRequest = (requestId, reason = 'Insufficient justification') => {
     const resolvedAt = new Date().toISOString();
     setPendingRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: 'Rejected', resolvedAt, reason } : r));
-    requestsAPI.update(requestId, { status: 'Rejected', resolvedAt, reason }).catch(() => {});
+    requestsAPI.update(requestId, { status: 'Rejected', resolvedAt, reason }).catch(() => { });
     const req = pendingRequests.find(r => r.id === requestId);
     if (req) {
       logAction(userName, 'Rejected Access Request', req.resource);
@@ -702,7 +419,7 @@ export const AppProvider = ({ children }) => {
   // ── Watermark config sync ────────────────────────────────────
   const updateWatermarkConfig = (config) => {
     setWatermarkConfig(config);
-    configAPI.set('watermark', config).catch(() => {});
+    configAPI.set('watermark', config).catch(() => { });
   };
 
   // ── Group Actions ─────────────────────────────────────────────
@@ -717,7 +434,7 @@ export const AppProvider = ({ children }) => {
       createdAt: new Date().toISOString()
     };
     setGroups(prev => [...prev, newGroup]);
-    groupsAPI.upsert(newGroup).catch(() => {});
+    groupsAPI.upsert(newGroup).catch(() => { });
     logAction(userName, 'Created Group', name);
     pushNotification('system', `Group "${name}" has been created.`);
   };
@@ -726,7 +443,7 @@ export const AppProvider = ({ children }) => {
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
     const group = groups.find(g => g.id === groupId);
     if (group) {
-      groupsAPI.upsert({ ...group, members }).catch(() => {});
+      groupsAPI.upsert({ ...group, members }).catch(() => { });
     }
     logAction(userName, 'Updated Group Members', groupId);
   };
@@ -734,12 +451,12 @@ export const AppProvider = ({ children }) => {
   const deleteGroup = (groupId) => {
     const group = groups.find(g => g.id === groupId);
     setGroups(prev => prev.filter(g => g.id !== groupId));
-    groupsAPI.delete(groupId).catch(() => {});
+    groupsAPI.delete(groupId).catch(() => { });
     logAction(userName, 'Deleted Group', group?.name);
   };
 
   // ── Computed ──────────────────────────────────────────────────
-  const unreadCount          = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.read).length;
   const pendingApprovalCount = pendingApprovals.filter(a => a.status === 'Pending').length;
 
   // ── Context Value ─────────────────────────────────────────────
@@ -780,5 +497,6 @@ export const AppProvider = ({ children }) => {
     </AppContext.Provider>
   );
 };
+
 
 export const useApp = () => useContext(AppContext);
