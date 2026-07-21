@@ -1,48 +1,48 @@
--- ============================================================
--- ProjectFlow KE — Supabase Schema
--- Run this in the Supabase SQL Editor (supabase.com/dashboard)
--- ============================================================
+-- ================================================================
+-- ProjectFlow KE — Production Supabase Database Schema
+-- Paste and run this script in the Supabase SQL Editor (supabase.com)
+-- ================================================================
 
--- 1. Documents
-CREATE TABLE IF NOT EXISTS pf_documents (
-  id            TEXT PRIMARY KEY,
-  name          TEXT NOT NULL DEFAULT '',
-  dept          TEXT DEFAULT '',
-  status        TEXT DEFAULT 'Draft',
-  access        TEXT DEFAULT 'Private',
-  date          TEXT DEFAULT '',
-  owner         TEXT DEFAULT '',
-  sensitivity   TEXT DEFAULT 'Internal',
-  version       TEXT DEFAULT '1.0',
-  content       TEXT DEFAULT '',
-  has_lock      BOOLEAN DEFAULT FALSE,
-  vault_locked  BOOLEAN DEFAULT FALSE,
-  vault_password TEXT,
-  signature     TEXT,
-  certified_by  TEXT,
-  certified_at  TEXT,
-  deleted_at    TEXT,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 2. Users
+-- 1. Users Table
 CREATE TABLE IF NOT EXISTS pf_users (
   id           TEXT PRIMARY KEY,
   name         TEXT NOT NULL DEFAULT '',
   role         TEXT DEFAULT 'Viewer',
   departments  JSONB DEFAULT '[]'::JSONB,
-  pin          TEXT,
+  pin          TEXT DEFAULT '1234',
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Departments
+-- 2. Documents Table
+CREATE TABLE IF NOT EXISTS pf_documents (
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL DEFAULT '',
+  dept           TEXT DEFAULT '',
+  status         TEXT DEFAULT 'Draft',
+  access         TEXT DEFAULT 'Private',
+  date           TEXT DEFAULT '',
+  owner          TEXT DEFAULT '',
+  sensitivity    TEXT DEFAULT 'Internal',
+  version        TEXT DEFAULT '1.0',
+  content        TEXT DEFAULT '',
+  has_lock       BOOLEAN DEFAULT FALSE,
+  vault_locked   BOOLEAN DEFAULT FALSE,
+  vault_password TEXT,
+  signature      TEXT,
+  certified_by   TEXT,
+  certified_at   TEXT,
+  deleted_at     TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Departments Table
 CREATE TABLE IF NOT EXISTS pf_departments (
   id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name       TEXT UNIQUE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Pending Approvals
+-- 4. Pending Approvals Table
 CREATE TABLE IF NOT EXISTS pf_pending_approvals (
   id           TEXT PRIMARY KEY,
   doc_id       TEXT,
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS pf_pending_approvals (
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Pending Requests (Access Requests)
+-- 5. Access Requests Table
 CREATE TABLE IF NOT EXISTS pf_pending_requests (
   id            TEXT PRIMARY KEY,
   resource      TEXT DEFAULT '',
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS pf_pending_requests (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. Notifications
+-- 6. Notifications Table
 CREATE TABLE IF NOT EXISTS pf_notifications (
   id         TEXT PRIMARY KEY,
   type       TEXT DEFAULT 'info',
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS pf_notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. Audit Logs
+-- 7. Audit Logs Table
 CREATE TABLE IF NOT EXISTS pf_audit_logs (
   id         TEXT PRIMARY KEY,
   user_name  TEXT DEFAULT '',
@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS pf_audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. Threat Alerts
+-- 8. Threat Alerts Table
 CREATE TABLE IF NOT EXISTS pf_threat_alerts (
   id         TEXT PRIMARY KEY,
   type       TEXT DEFAULT '',
@@ -101,14 +101,14 @@ CREATE TABLE IF NOT EXISTS pf_threat_alerts (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. Config (key-value store)
+-- 9. System Config Table
 CREATE TABLE IF NOT EXISTS pf_config (
   key        TEXT PRIMARY KEY,
   value      JSONB,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. Groups (collaboration groups)
+-- 10. Collaboration Groups Table
 CREATE TABLE IF NOT EXISTS pf_groups (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL DEFAULT '',
@@ -119,11 +119,10 @@ CREATE TABLE IF NOT EXISTS pf_groups (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
-
--- ============================================================
--- Row Level Security — Enable + Allow anon full access
--- (For production, restrict these policies to authenticated users)
--- ============================================================
+-- ================================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- Enabling anonymous full access policies for development/demo
+-- ================================================================
 
 ALTER TABLE pf_documents         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pf_users             ENABLE ROW LEVEL SECURITY;
@@ -136,7 +135,6 @@ ALTER TABLE pf_threat_alerts     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pf_config            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pf_groups            ENABLE ROW LEVEL SECURITY;
 
--- Policies: allow anon key full CRUD (SELECT, INSERT, UPDATE, DELETE)
 DO $$
 DECLARE
   tbl TEXT;
@@ -149,30 +147,23 @@ BEGIN
       'pf_config','pf_groups'
     ])
   LOOP
-    EXECUTE format(
-      'CREATE POLICY "Allow anon select on %1$s" ON %1$s FOR SELECT TO anon USING (true);',
-      tbl
-    );
-    EXECUTE format(
-      'CREATE POLICY "Allow anon insert on %1$s" ON %1$s FOR INSERT TO anon WITH CHECK (true);',
-      tbl
-    );
-    EXECUTE format(
-      'CREATE POLICY "Allow anon update on %1$s" ON %1$s FOR UPDATE TO anon USING (true) WITH CHECK (true);',
-      tbl
-    );
-    EXECUTE format(
-      'CREATE POLICY "Allow anon delete on %1$s" ON %1$s FOR DELETE TO anon USING (true);',
-      tbl
-    );
+    EXECUTE format('DROP POLICY IF EXISTS "Allow anon select on %1$s" ON %1$s;', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "Allow anon insert on %1$s" ON %1$s;', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "Allow anon update on %1$s" ON %1$s;', tbl);
+    EXECUTE format('DROP POLICY IF EXISTS "Allow anon delete on %1$s" ON %1$s;', tbl);
+
+    EXECUTE format('CREATE POLICY "Allow anon select on %1$s" ON %1$s FOR SELECT TO anon USING (true);', tbl);
+    EXECUTE format('CREATE POLICY "Allow anon insert on %1$s" ON %1$s FOR INSERT TO anon WITH CHECK (true);', tbl);
+    EXECUTE format('CREATE POLICY "Allow anon update on %1$s" ON %1$s FOR UPDATE TO anon USING (true) WITH CHECK (true);', tbl);
+    EXECUTE format('CREATE POLICY "Allow anon delete on %1$s" ON %1$s FOR DELETE TO anon USING (true);', tbl);
   END LOOP;
 END
 $$;
 
+-- ================================================================
+-- INITIAL SEED DATA
+-- ================================================================
 
--- ============================================================
--- Seed data: default departments
--- ============================================================
 INSERT INTO pf_departments (name) VALUES
   ('Finance'),
   ('Legal'),
@@ -183,7 +174,21 @@ INSERT INTO pf_departments (name) VALUES
   ('Compliance')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed: default admin user
 INSERT INTO pf_users (id, name, role, departments, pin) VALUES
-  ('admin-001', 'System Admin', 'Admin', '["IT"]'::JSONB, '1234')
+  ('admin-001', 'System Admin',     'Admin',      '["IT","Finance","Legal","Human Resources"]'::JSONB, '1234'),
+  ('user-002',  'Sarah Manager',    'Manager',    '["Finance","Human Resources"]'::JSONB,             '1234'),
+  ('user-003',  'Kevin Otieno',     'Staff',      '["Operations"]'::JSONB,                             '4321'),
+  ('user-004',  'Guest Contractor', 'Restricted', '[]'::JSONB,                                         '9999')
 ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO pf_documents (id, name, dept, status, access, date, owner, sensitivity, version, content) VALUES
+  ('doc-101', 'Finance_Report_Q1_2026.pdf',   'Finance', 'Approved',     'Finance Only',  '2026-04-20', 'System Admin',  'Confidential', '3.0', 'REGIONAL FINANCE SUMMARY - Q1 2026\nRevenue: KES 4.2B\nGrowth: +12% YoY\nStatus: Verified by Central Audit.'),
+  ('doc-102', 'Confidential_M&A_Log.xlsx',    'Legal',   'Confidential', 'Restricted',    '2026-04-18', 'Sarah Manager', 'Restricted',   '1.0', 'M&A TRANSACTION LOG [ENCRYPTED]\nTarget: Coastal Logistics Ltd\nStatus: Due Diligence Phase\nRisk: High'),
+  ('doc-103', 'HR_Policy_Handbook_2026.docx', 'Human Resources', 'Under Review', 'Internal Only', '2026-04-19', 'Sarah Manager', 'Internal', '2.1', 'STANDARD OPERATING PROCEDURES 2026\n1. Leave Policy\n2. Health Insurance\n3. Disciplinary Framework'),
+  ('doc-104', 'Ops_Manual_Nairobi_v4.pdf',    'Operations', 'Draft',     'Internal Only', '2026-04-21', 'Kevin Otieno',  'Internal',     '1.0', 'NAIROBI BRANCH OPERATIONS GUIDE\nGrid maintenance schedule... (STAGING)')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO pf_config (key, value) VALUES
+  ('watermark', '{"enabled":true,"text":"PROJECTFLOW KE - CONFIDENTIAL","opacity":0.1}'::JSONB),
+  ('last_hash', '"0000000000000000"'::JSONB)
+ON CONFLICT (key) DO NOTHING;

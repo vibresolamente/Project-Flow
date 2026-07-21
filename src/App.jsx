@@ -50,16 +50,18 @@ import ViewManager from './components/ViewManager';
 import CommandPalette from './components/CommandPalette';
 import PortalView from './components/PortalView';
 import DocumentCenterView from './components/DocumentCenterView';
+import DatabaseSettingsModal from './components/DatabaseSettingsModal';
 
 import { useApp } from './context/AppContext';
 
 const ApplicationLayout = () => {
-  const { activeTab, setActiveTab, userRole, setUserRole, pendingRequests, addDocument, unreadCount, pendingApprovalCount, theme, toggleTheme, isCloudOffline } = useApp();
+  const { activeTab, setActiveTab, userRole, setUserRole, pendingRequests, addDocument, unreadCount, pendingApprovalCount, theme, toggleTheme, isCloudOffline, dbStatus, refreshDatabaseData } = useApp();
   const [notifOpen, setNotifOpen] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showViewManager, setShowViewManager] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [showDbModal, setShowDbModal] = useState(false);
 
   // THEME MANAGEMENT
   useEffect(() => {
@@ -117,13 +119,26 @@ const ApplicationLayout = () => {
               <Lock size={18} />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-base md:text-lg font-bold leading-none text-primary">ProjectFlow KE</h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                 <div className={`w-1.5 h-1.5 rounded-full ${isCloudOffline ? 'bg-amber-500' : 'bg-emerald-500'} animate-pulse`}></div>
-                 <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">
-                   {isCloudOffline ? 'Zero-Trust Local Sandbox Active' : 'System Online: Cloud Nodes Syncing'}
+              <h1 className="text-base md:text-lg font-bold leading-none text-primary flex items-center gap-2">
+                ProjectFlow KE
+              </h1>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDbModal(true);
+                }}
+                className="flex items-center gap-1.5 mt-1 hover:opacity-80 transition-opacity bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700/60"
+                title="Click to configure Supabase Database Connection & check table health"
+              >
+                 <div className={`w-1.5 h-1.5 rounded-full ${dbStatus?.connected ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`}></div>
+                 <p className="text-[9px] font-bold uppercase text-slate-600 dark:text-slate-300 tracking-wider flex items-center gap-1">
+                   {dbStatus?.connected ? (
+                     <>Database: Cloud Active ({dbStatus.latencyMs}ms)</>
+                   ) : (
+                     <>Database: Local Sandbox (Click to Connect)</>
+                   )}
                  </p>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -286,8 +301,9 @@ const ApplicationLayout = () => {
               )}
             </AnimatePresence>
 
-            {/* GLOBAL MODALS [v2.1] */}
+            {/* GLOBAL MODALS [v2.5] */}
             <AnimatePresence>
+              <DatabaseSettingsModal isOpen={showDbModal} onClose={() => setShowDbModal(false)} onRefreshData={refreshDatabaseData} />
               {showViewManager && <ViewManager key="view-manager" onClose={() => setShowViewManager(false)} />}
               {isCommandPaletteOpen && <CommandPalette key="command-palette" isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />}
               {showUploadModal && (

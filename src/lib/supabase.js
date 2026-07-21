@@ -1,37 +1,44 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL    || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Retrieve credentials from localStorage override or Vite environment variables
+export const getSupabaseCredentials = () => {
+  const localUrl = localStorage.getItem('pf_supabase_url');
+  const localKey = localStorage.getItem('pf_supabase_anon_key');
 
-// Synchronous check of cached offline mode to prevent WebSocket spin-up on boot
-const isCachedOffline = localStorage.getItem('pf_supabase_offline') === 'true';
+  const url = (localUrl || import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const key = (localKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-export const isDbConfigured =
-  Boolean(supabaseUrl && supabaseAnonKey) &&
-  !supabaseUrl.includes('YOUR_PROJECT_ID') &&
-  !isCachedOffline;
+  const isConfigured =
+    Boolean(url && key) &&
+    !url.includes('YOUR_PROJECT_ID') &&
+    !url.includes('YOUR_SUPABASE');
 
-// Robust fetch wrapper that retries transient failures (e.g. network drops, HTTP/2 stream refusals, or rate limits)
+  return { url, key, isConfigured };
+};
+
+const { url: initialUrl, key: initialKey, isConfigured: initialIsConfigured } = getSupabaseCredentials();
+
+export let isDbConfigured = initialIsConfigured;
+
+// Robust fetch wrapper that retries transient server errors smoothly
 const retryFetch = async (url, options) => {
-  const maxRetries = 3;
+  const maxRetries = 2;
   const initialDelay = 150;
   let attempt = 0;
 
   while (true) {
     try {
       const response = await fetch(url, options);
-      // Retry for transient server/rate-limit status codes (429, 502, 503, 504)
       if (
-        (response.status === 429 || 
-         response.status === 502 || 
-         response.status === 503 || 
-         response.status === 504) && 
+        (response.status === 429 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504) &&
         attempt < maxRetries
       ) {
         attempt++;
         const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 50;
-        console.warn(`[Supabase Fetch] Status ${response.status}. Retrying in ${Math.round(delay)}ms (Attempt ${attempt}/${maxRetries})...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
       return response;
@@ -39,23 +46,21 @@ const retryFetch = async (url, options) => {
       if (attempt < maxRetries) {
         attempt++;
         const delay = initialDelay * Math.pow(2, attempt) + Math.random() * 50;
-        console.warn(`[Supabase Fetch] Connection failure or stream refused. Retrying in ${Math.round(delay)}ms (Attempt ${attempt}/${maxRetries})...`, error);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
         continue;
       }
-      // If we reach here, all retries failed due to a network connection error
-      if (localStorage.getItem('pf_supabase_offline') !== 'true') {
-        localStorage.setItem('pf_supabase_offline', 'true');
-        console.warn('[DB] Supabase domain is unreachable during fetch. Activating local security sandbox.');
-        window.location.reload();
-      }
+      console.warn('[Supabase Fetch] Connection attempt failed:', error.message);
       throw error;
     }
   }
 };
 
-export const supabase = isDbConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
+export const createSupabaseInstance = (targetUrl, targetKey) => {
+  if (!targetUrl || !targetKey || targetUrl.includes('YOUR_PROJECT_ID')) {
+    return null;
+  }
+  try {
+    return createClient(targetUrl, targetKey, {
       global: {
         fetch: retryFetch,
       },
@@ -65,47 +70,75 @@ export const supabase = isDbConfigured
         },
         config: {
           broadcast: { self: true, ack: false },
-        }
-      }
-    })
-  : null;
-
-export const isCloudOffline = isCachedOffline;
-
-// Asynchronous background reachability verification
-if (supabaseUrl && !supabaseUrl.includes('YOUR_PROJECT_ID')) {
-  setTimeout(() => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    
-    // Check rest/v1 endpoint (gives 401 instead of 404, or we can just fetch with anon key to be silent)
-    fetch(`${supabaseUrl}/rest/v1/pf_users?select=id&limit=1`, { 
-      method: 'GET', 
-      headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`
+        },
       },
-      signal: controller.signal 
-    })
-      .then((res) => {
-        clearTimeout(timeoutId);
-        if (res.status >= 200 && res.status < 500) {
-          if (localStorage.getItem('pf_supabase_offline') === 'true') {
-            localStorage.removeItem('pf_supabase_offline');
-            console.log('[DB] Supabase resolved. Reconnecting cloud nodes...');
-            window.location.reload();
-          }
-        } else {
-          throw new Error('Unreachable status');
-        }
-      })
-      .catch(() => {
-        clearTimeout(timeoutId);
-        if (localStorage.getItem('pf_supabase_offline') !== 'true') {
-          localStorage.setItem('pf_supabase_offline', 'true');
-          console.warn('[DB] Supabase domain is unreachable. Activating local security sandbox.');
-          window.location.reload();
-        }
-      });
-  }, 1000);
-}
+    });
+  } catch (err) {
+    console.error('[Supabase Init Error]', err);
+    return null;
+  }
+};
+
+export let supabase = createSupabaseInstance(initialUrl, initialKey);
+
+// Utility function to save credentials dynamically and re-initialize client
+export const saveSupabaseCredentials = (newUrl, newKey) => {
+  if (newUrl) localStorage.setItem('pf_supabase_url', newUrl.trim());
+  if (newKey) localStorage.setItem('pf_supabase_anon_key', newKey.trim());
+  
+  const { url, key, isConfigured } = getSupabaseCredentials();
+  isDbConfigured = isConfigured;
+  supabase = createSupabaseInstance(url, key);
+  return isConfigured;
+};
+
+// Utility function to clear stored credentials
+export const clearSupabaseCredentials = () => {
+  localStorage.removeItem('pf_supabase_url');
+  localStorage.removeItem('pf_supabase_anon_key');
+  const { url, key, isConfigured } = getSupabaseCredentials();
+  isDbConfigured = isConfigured;
+  supabase = createSupabaseInstance(url, key);
+};
+
+// Asynchronous background reachability & latency check
+export const checkSupabaseHealth = async (customUrl, customKey) => {
+  const targetUrl = customUrl || getSupabaseCredentials().url;
+  const targetKey = customKey || getSupabaseCredentials().key;
+
+  if (!targetUrl || !targetKey || targetUrl.includes('YOUR_PROJECT_ID')) {
+    return { connected: false, latencyMs: 0, statusText: 'Credentials missing' };
+  }
+
+  const startTime = performance.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const res = await fetch(`${targetUrl}/rest/v1/pf_users?select=id&limit=1`, {
+      method: 'GET',
+      headers: {
+        apikey: targetKey,
+        Authorization: `Bearer ${targetKey}`,
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const latencyMs = Math.round(performance.now() - startTime);
+
+    if (res.ok || res.status === 200 || res.status === 206) {
+      return { connected: true, latencyMs, statusText: 'Cloud Active' };
+    } else if (res.status === 401 || res.status === 403) {
+      return { connected: false, latencyMs, statusText: 'Invalid API Key / Unauthorized' };
+    } else if (res.status === 404) {
+      return { connected: false, latencyMs, statusText: 'Schema/Table Missing (Run SQL Script)' };
+    } else {
+      return { connected: false, latencyMs, statusText: `HTTP ${res.status}` };
+    }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return { connected: false, latencyMs: 0, statusText: 'Network / Unreachable' };
+  }
+};
+
+export const isCloudOffline = !isDbConfigured;
