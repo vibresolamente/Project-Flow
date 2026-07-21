@@ -1,98 +1,27 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  ShieldCheck, History, Activity, FolderLock, Rocket, ArrowRightLeft, Users, Zap, FileBadge, ShieldAlert, ChevronRight 
+import {
+  ShieldCheck, History, Activity, FolderLock, Rocket, ArrowRightLeft, Users, Zap, FileBadge, ShieldAlert,
+  ChevronRight, Calendar, CloudSun, Clock, CheckCircle, AlertCircle, ArrowUpRight
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-
-const StatStrip = ({ label, value, note, color }) => (
-  <div className="card flex items-center gap-4 bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-850" style={{ borderLeft: `4px solid ${color}` }}>
-    <div>
-      <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest mb-1">{label}</p>
-      <p className="text-2xl font-black text-slate-950 dark:text-white leading-none">{value}</p>
-      <p className="text-[10px] font-bold text-slate-900 dark:text-slate-400 mt-1 uppercase tracking-tight">{note}</p>
-    </div>
-  </div>
-);
-
-const PredictiveAction = ({ icon, label, desc, onClick }) => (
-  <button onClick={onClick} className="flex-1 text-left p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-950 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 transition-all group shadow-md shadow-slate-900/5">
-     <div className="flex items-center gap-3 mb-2">
-        <div className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">{React.cloneElement(icon, { size: 16 })}</div>
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-950 dark:text-white">{label}</span>
-     </div>
-     <p className="text-[11px] font-bold text-slate-800 dark:text-slate-300 leading-snug">{desc}</p>
-  </button>
-);
-
-const ModuleCard = ({ icon, title, desc, count, badge, onClick }) => (
-  <div 
-    className="card cursor-pointer group animate-slide-up"
-    onClick={onClick}
-  >
-    <div className="flex justify-between items-start mb-4">
-      <div style={{ background: 'rgba(31,122,107,0.08)', width: '48px', height: '48px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1F7A6B', transition: 'all 0.2s' }}>
-        {React.cloneElement(icon, { size: 22 })}
-      </div>
-      <div className="flex gap-2 items-center">
-        {badge && <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-100">{badge}</span>}
-        {count && <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{count}</span>}
-      </div>
-    </div>
-    <h4 className="font-bold text-base mb-1">{title}</h4>
-    <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
-  </div>
-);
-
-const RecentDocItem = ({ name, time, type, dept, onClick }) => {
-  const typeColors = { XLS: '#16A34A', PDF: '#DC2626', DOC: '#2563EB', ZIP: '#6B7280' };
-  const color = typeColors[type] || '#1F7A6B';
-  return (
-    <div onClick={onClick} className="px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-      <div className="flex items-center gap-3">
-        <div style={{ background: `${color}15`, color, width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>
-          {type}
-        </div>
-        <div>
-          <p className="text-sm font-bold text-slate-950 dark:text-white">{name}</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            {dept && <span className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded">{dept}</span>}
-            <span className="text-xs text-slate-700 dark:text-slate-400 font-semibold">{time}</span>
-          </div>
-        </div>
-      </div>
-      <ChevronRight size={14} className="text-slate-950 dark:text-slate-400" />
-    </div>
-  );
-};
-
-const ActivityItem = ({ user, action, target, time }) => {
-  const actionColors = { Approved: '#16A34A', Uploaded: '#2563EB', 'Auto-archived': '#6B7280', Deleted: '#DC2626', Requested: '#D97706' };
-  const color = actionColors[action] || '#1F7A6B';
-  return (
-    <div className="px-6 py-4 flex gap-3 items-start border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-      <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center text-xs font-black">
-        {user[0]}
-      </div>
-      <div className="flex-1 text-left">
-        <p className="text-xs text-slate-950 dark:text-slate-200">
-          <span className="font-bold">{user}</span>
-          <span style={{ color, fontWeight: 805, margin: '0 4px' }}>{action}</span>
-          <span className="font-bold">{target}</span>
-        </p>
-        {time && <p className="text-[10px] text-slate-700 dark:text-slate-400 font-semibold mt-0.5">{time}</p>}
-      </div>
-    </div>
-  );
-};
+import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 
 const PortalView = ({ navigate, onUploadClick }) => {
-  const { documents, auditLogs, pendingApprovalCount, systemUsers } = useApp();
+  const { documents, auditLogs, pendingApprovalCount, systemUsers, setActiveDocId } = useApp();
 
   const totalDocs = documents.length;
   const recentDocs = documents.slice(0, 5);
-  const recentLogs = auditLogs.slice(0, 5);
-  const activeUsersCount = Math.floor(systemUsers.length * 2.5 + Math.random() * 5);
+  const recentLogs = auditLogs.slice(0, 8); // GitHub style feed
+  const onlineUsers = systemUsers.filter(u => u.status === 'active' || Math.random() > 0.5); // Mock online presence
+
+  // Greeting and ambiance based on local time
+  const timeAmbiance = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: 'Good Morning', subText: 'Starting the day with pristine node compliance.', bg: 'from-amber-600/30 via-slate-900 to-slate-900', icon: '🌅' };
+    if (hour < 17) return { text: 'Good Afternoon', subText: 'High-throughput operational cycles in progress.', bg: 'from-emerald-600/30 via-slate-900 to-slate-900', icon: '☀️' };
+    return { text: 'Good Evening', subText: 'Zero-trust night enclaves active and monitoring.', bg: 'from-indigo-600/30 via-slate-900 to-slate-900', icon: '🌙' };
+  }, []);
 
   const getExtension = (name) => {
     const ext = name.split('.').pop().toUpperCase();
@@ -109,135 +38,199 @@ const PortalView = ({ navigate, onUploadClick }) => {
     return new Date(dateStr).toLocaleDateString();
   };
 
+  // Sparkline data for Portal stats
+  const sparkData = useMemo(() => Array.from({ length: 10 }, (_, i) => ({ v: Math.floor(Math.random() * 15 + (i * 2)) })), []);
+
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-12">
-      {/* HERO BANNER */}
-      <div className="relative p-10 md:p-16 rounded-[2rem] hero-gradient text-white overflow-hidden shadow-2xl border-2 border-slate-950 dark:border-slate-800" style={{ borderRadius: '24px' }}>
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black mb-6 uppercase tracking-widest bg-slate-950/40 border-2 border-emerald-400/40 text-emerald-300">
-            <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
-            Secure Enterprise Platform — Active
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-16">
+      
+      {/* ── AMBIENT WEATHER-GREETING HERO ── */}
+      <div className={`relative p-8 md:p-12 rounded-[2.5rem] bg-gradient-to-br ${timeAmbiance.bg} text-white overflow-hidden shadow-2xl border border-slate-800`}>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(16,185,129,0.1),transparent_60%)] pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              {timeAmbiance.icon} Compliance Ledger Active
+            </div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white">
+              {timeAmbiance.text}, Team
+            </h1>
+            <p className="text-slate-300 text-sm font-medium max-w-md leading-relaxed">
+              {timeAmbiance.subText} Centralized document governance & secure collaborative nodes.
+            </p>
           </div>
-          <h2 className="text-3xl md:text-5xl font-black mb-4 tracking-tight text-white" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
-            ProjectFlow KE
-          </h2>
-          <p className="text-emerald-100 text-base md:text-lg font-bold mb-8 max-w-lg leading-relaxed" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
-            Centralized document governance for Kenyan enterprises. Powered by SharePoint, secured by zero-trust protocols.
-          </p>
-          <div className="flex gap-4 flex-wrap">
-            <button 
-              className="px-8 py-3 rounded-xl font-black transition-all hover:scale-105 active:scale-95 shadow-xl" 
-              style={{ 
-                color: '#1F7A6B', 
-                backgroundColor: '#FFFFFF', 
-                border: '2px solid #FFFFFF',
-                textTransform: 'uppercase', 
-                letterSpacing: '0.05em',
-                cursor: 'pointer'
-              }} 
-              onClick={() => navigate('docs')}
-            >
-              📂 Documents
+
+          <div className="flex gap-3 flex-wrap">
+            <button onClick={() => navigate('docs')} className="px-6 py-3.5 bg-white text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 transition-all">
+              📂 Document Center
             </button>
-            <button 
-              className="px-8 py-3 rounded-xl font-black hover:bg-white/20 transition-all border-2 border-white text-white active:scale-95 shadow-xl" 
-              style={{ 
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                textTransform: 'uppercase', 
-                letterSpacing: '0.05em',
-                cursor: 'pointer'
-              }} 
-              onClick={onUploadClick}
-            >
-              ⬆ Upload
+            <button onClick={onUploadClick} className="px-6 py-3.5 bg-white/10 border border-white/20 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/15 hover:scale-105 transition-all">
+              🚀 Quick Upload
             </button>
           </div>
         </div>
-        <ShieldCheck className="absolute -right-12 -bottom-12 h-64 w-64 rotate-12 opacity-5 text-white" />
+
+        {/* Decorative Watermark */}
+        <ShieldCheck className="absolute -right-16 -bottom-16 h-72 w-72 rotate-12 opacity-5 text-white pointer-events-none" />
       </div>
 
-      {/* PREDICTIVE ACTIONS (SMART FEED) */}
-      <div className="flex flex-col md:flex-row gap-4">
-         {pendingApprovalCount > 0 && (
-           <PredictiveAction 
-             icon={<Zap />} 
-             label="Workflow Action" 
-             desc={`You have ${pendingApprovalCount} document(s) awaiting approval in the engine.`} 
-             onClick={() => navigate('workflows')}
-           />
-         )}
-         <PredictiveAction 
-           icon={<ShieldAlert />} 
-           label="Security Review" 
-           desc="No unauthorized access attempts detected in the last 24 hours." 
-           onClick={() => navigate('governance')}
-         />
-         <PredictiveAction 
-           icon={<FileBadge />} 
-           label="Compliance" 
-           desc="System integrity verification pass completed. All nodes synchronized." 
-           onClick={() => navigate('testing')}
-         />
+      {/* ── SMART QUICK-ACTIONS BAR ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {pendingApprovalCount > 0 ? (
+          <button onClick={() => navigate('workflows')} className="p-5 rounded-3xl bg-white border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all text-left flex gap-4 items-center group">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Zap size={20} /></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending Approvals</p>
+              <h4 className="font-bold text-sm text-slate-900 mt-0.5">{pendingApprovalCount} documents require signature</h4>
+            </div>
+          </button>
+        ) : (
+          <div className="p-5 rounded-3xl bg-white border border-slate-100 shadow-sm text-left flex gap-4 items-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><CheckCircle size={20} /></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Workflow Engine</p>
+              <h4 className="font-bold text-sm text-slate-900 mt-0.5">All action items cleared</h4>
+            </div>
+          </div>
+        )}
+
+        <button onClick={() => navigate('collab')} className="p-5 rounded-3xl bg-white border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all text-left flex gap-4 items-center group">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><Rocket size={20} /></div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Collaboration Canvas</p>
+            <h4 className="font-bold text-sm text-slate-900 mt-0.5">Join live document meet session</h4>
+          </div>
+        </button>
+
+        <button onClick={() => navigate('testing')} className="p-5 rounded-3xl bg-white border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all text-left flex gap-4 items-center group">
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0"><ShieldAlert size={20} /></div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Compliance Health</p>
+            <h4 className="font-bold text-sm text-slate-900 mt-0.5">100% integrity validation passed</h4>
+          </div>
+        </button>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatStrip label="Total Documents" value={totalDocs.toString()} note="System-wide" color="#1F7A6B" />
-        <StatStrip label="Active Users" value={activeUsersCount.toString()} note="Online now" color="#059669" />
-        <StatStrip label="Pending Workflow" value={pendingApprovalCount.toString()} note="Needs action" color="#D97706" />
-        <StatStrip label="Ledger Integrity" value="100%" note="Verified Node" color="#2563EB" />
+      {/* ── METRIC CARDS WITH SPARKLINE ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Vault Documents', value: totalDocs, color: '#10B981', note: 'Secure archives' },
+          { label: 'Presence Index', value: onlineUsers.length, color: '#3B82F6', note: 'Active operators' },
+          { label: 'Threat Enclaves', value: '0', color: '#EF4444', note: 'Clean audit trail' },
+          { label: 'Ledger Integrity', value: '100%', color: '#8B5CF6', note: 'SHA-256 Verified' }
+        ].map((stat, i) => (
+          <div key={i} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm relative overflow-hidden flex flex-col justify-between">
+            <div>
+              <p className="text-3xl font-black text-slate-900">{stat.value}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
+            </div>
+            <div className="h-10 mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={sparkData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <Area type="monotone" dataKey="v" stroke={stat.color} fill={`${stat.color}15`} strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[9px] text-slate-400 font-bold mt-2 uppercase tracking-wide">{stat.note}</p>
+          </div>
+        ))}
       </div>
 
-      {/* CORE MODULES */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <ModuleCard icon={<FolderLock />} title="Vault" desc="Encrypted file access" badge="Secure" onClick={() => navigate('docs')} />
-        <ModuleCard icon={<Rocket />} title="Collab" desc="Live team editing" onClick={() => navigate('collab')} />
-        <ModuleCard icon={<ArrowRightLeft />} title="Transfer" desc="Large file sharing" onClick={() => navigate('transfer')} />
-        <ModuleCard icon={<Users />} title="Depts" desc="Team workspaces" onClick={() => navigate('depts')} />
+      {/* ── CORE MODULES GRID ── */}
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Platform Modules</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { icon: <FolderLock />, title: 'Secured Vault', desc: 'Encrypted document safe', route: 'docs' },
+            { icon: <Rocket />, title: 'Live Collab', desc: 'Realtime Docs, Sheets, Meet', route: 'collab' },
+            { icon: <ArrowRightLeft />, title: 'Data Pipeline', desc: 'Large file staging center', route: 'transfer' },
+            { icon: <Users />, title: 'Roster Hub', desc: 'Dynamic identity matrices', route: 'identity' }
+          ].map((m, i) => (
+            <button key={i} onClick={() => navigate(m.route)} className="p-6 rounded-3xl bg-white border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all text-left flex flex-col justify-between h-40 group">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">{m.icon}</div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                  {m.title} <ChevronRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" />
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-1">{m.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* FEED SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-4">
+      {/* ── RECENT DOCS CAROUSEL & ACTIVITY STREAM ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Document Carousel Box */}
         <div className="space-y-4">
-          <h3 className="text-sm font-black uppercase tracking-widest text-slate-950 dark:text-slate-200 flex items-center gap-2">
-            <History size={16} /> Recent Documents
+          <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 flex items-center gap-2 px-1">
+            <History size={15} /> Recent Workspace Documents
           </h3>
-          <div className="card p-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 space-y-3">
             {recentDocs.length === 0 ? (
-              <div className="p-8 text-center text-slate-500 text-sm">No documents found.</div>
+              <div className="p-8 text-center text-slate-400 text-xs">No recent items</div>
             ) : (
-              recentDocs.map(doc => (
-                <RecentDocItem 
-                  key={doc.id} 
-                  name={doc.name} 
-                  time={doc.date} 
-                  type={getExtension(doc.name)} 
-                  dept={doc.dept} 
-                  onClick={() => {
-                    setActiveDocId(doc.id);
-                    navigate('collab');
-                  }}
-                />
-              ))
+              recentDocs.map(doc => {
+                const ext = getExtension(doc.name);
+                const color = ext === 'XLS' ? '#10B981' : ext === 'PDF' ? '#EF4444' : '#3B82F6';
+                return (
+                  <div key={doc.id} onClick={() => { setActiveDocId(doc.id); navigate('collab'); }}
+                    className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl cursor-pointer transition-colors group">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs" style={{ background: `${color}15`, color }}>{ext}</div>
+                      <div>
+                        <h4 className="font-bold text-xs text-slate-900 group-hover:text-emerald-600 transition-colors">{doc.name}</h4>
+                        <p className="text-[10px] text-slate-400 mt-1 font-semibold flex items-center gap-2">
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded">{doc.dept}</span>
+                          <span>{doc.date}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
 
+        {/* Live GitHub-style Activity Feed */}
         <div className="space-y-4">
-          <h3 className="text-sm font-black uppercase tracking-widest text-slate-950 dark:text-slate-200 flex items-center gap-2">
-            <Activity size={16} /> Activity Stream
+          <h3 className="text-xs font-black uppercase tracking-widest text-slate-900 flex items-center gap-2 px-1">
+            <Activity size={15} /> Integrity Activity Feed
           </h3>
-          <div className="card p-0 overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-100">
             {recentLogs.length === 0 ? (
-               <div className="p-8 text-center text-slate-500 text-sm">No recent activity.</div>
+              <div className="p-8 text-center text-slate-400 text-xs">No active logs</div>
             ) : (
-              recentLogs.map(log => (
-                <ActivityItem key={log.id} user={log.user} action={log.action} target={log.target} time={timeAgo(log.time)} />
-              ))
+              recentLogs.map((log, index) => {
+                const isDelete = log.action?.toLowerCase().includes('delete') || log.action?.toLowerCase().includes('fail');
+                const isUpload = log.action?.toLowerCase().includes('upload') || log.action?.toLowerCase().includes('create');
+                const isSign = log.action?.toLowerCase().includes('sign') || log.action?.toLowerCase().includes('approve');
+                const badgeColor = isDelete ? 'bg-red-50 text-red-600 border-red-100' : isUpload ? 'bg-blue-50 text-blue-600 border-blue-100' : isSign ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-100';
+                return (
+                  <div key={log.id || index} className="p-4 flex gap-3.5 items-start hover:bg-slate-50/50 transition-colors">
+                    <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shrink-0">{log.user[0]}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-800 leading-normal">
+                        <span className="font-bold text-slate-950">{log.user}</span>
+                        <span className={`inline-block mx-2 text-[9px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>{log.action}</span>
+                        <span className="font-bold text-slate-900 truncate">{log.target}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase flex items-center gap-1"><Clock size={10} /> {timeAgo(log.time)}</p>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
+
       </div>
+
     </motion.div>
   );
 };

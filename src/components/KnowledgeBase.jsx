@@ -1,214 +1,296 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BookOpen,
-  HelpCircle,
-  FileText,
-  Video,
-  Search,
-  ChevronRight,
-  ExternalLink,
-  MessageSquare,
-  Globe,
-  Zap,
-  ShieldCheck
+  BookOpen, HelpCircle, FileText, Video, Search, ChevronRight, ExternalLink,
+  MessageSquare, Globe, Zap, ShieldCheck, ThumbsUp, ThumbsDown, Plus, Heading1, Heading2,
+  List, Code, Quote, Trash2, ArrowRight
 } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+
+const INITIAL_ARTICLES = [
+  {
+    id: '1',
+    category: 'Guide',
+    title: 'ProjectFlow v2.0 Ingest Protocol',
+    content: '# Core Ingest Protocol\nEvery file entering the system is evaluated by the zero-trust engine.\n\n## Cryptographic Hash Assignment\nUpon landing in SharePoint, files receive a unique SHA-256 validation identifier.\n\n## AD Department Routing\nAccess boundaries are automatically established at point of ingest.',
+    ratingUp: 12,
+    ratingDown: 0
+  },
+  {
+    id: '2',
+    category: 'Policies',
+    title: 'ISO 27001 Cryptographic Guidelines',
+    content: '# ISO 27001 Key Governance\nStandard Operating Procedures for key generation and vault enclaves.\n\n## Enclave Sealing\nEnsure passwords contain sufficient entropy to bypass brute-force vectors.',
+    ratingUp: 8,
+    ratingDown: 1
+  }
+];
 
 const KnowledgeBase = () => {
+  const { userRole, currentUser, logAction } = useApp();
+
+  const [articles, setArticles] = useState(INITIAL_ARTICLES);
   const [activeCat, setActiveCat] = useState('Guide');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Article Editor State
+  const [editingArticleId, setEditingArticleId] = useState(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+
+  // Selected article detail view
+  const [viewArticleId, setViewArticleId] = useState(INITIAL_ARTICLES[0].id);
+
+  const activeArticle = useMemo(() => {
+    return articles.find(a => a.id === viewArticleId) || articles[0];
+  }, [articles, viewArticleId]);
+
+  // Filtering based on search and category
+  const filteredArticles = useMemo(() => {
+    let base = articles;
+    if (activeCat) {
+      base = base.filter(a => a.category === activeCat);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter(a => a.title.toLowerCase().includes(q) || a.content.toLowerCase().includes(q));
+    }
+    return base;
+  }, [articles, activeCat, searchQuery]);
+
+  // Table of Contents generator based on markdown headers
+  const tableOfContents = useMemo(() => {
+    if (!activeArticle) return [];
+    const lines = activeArticle.content.split('\n');
+    return lines
+      .filter(line => line.startsWith('#'))
+      .map(line => {
+        const level = line.match(/^#+/)[0].length;
+        const text = line.replace(/^#+\s*/, '');
+        return { level, text };
+      });
+  }, [activeArticle]);
+
+  // Rating actions
+  const handleRate = (id, direction) => {
+    setArticles(prev => prev.map(a => {
+      if (a.id === id) {
+        return {
+          ...a,
+          ratingUp: direction === 'up' ? a.ratingUp + 1 : a.ratingUp,
+          ratingDown: direction === 'down' ? a.ratingDown + 1 : a.ratingDown
+        };
+      }
+      return a;
+    }));
+    logAction(currentUser?.name, `Rated article ${direction}`, id);
+  };
+
+  // Add Notion Slash command mockups
+  const insertSlashCommand = (cmd) => {
+    const markdownMap = {
+      h1: '\n# New Header 1\n',
+      h2: '\n## New Header 2\n',
+      list: '\n- List item 1\n- List item 2\n',
+      code: '\n```javascript\n// code block\n```\n',
+      quote: '\n> Secure Enclave Warning Quote\n'
+    };
+    setNewContent(p => p + (markdownMap[cmd] || ''));
+  };
+
+  const handleSaveArticle = () => {
+    if (!newTitle.trim()) return;
+
+    if (editingArticleId) {
+      // Edit
+      setArticles(prev => prev.map(a => a.id === editingArticleId ? { ...a, title: newTitle, content: newContent } : a));
+      logAction(currentUser?.name, 'Edited Knowledge Article', newTitle);
+      setEditingArticleId(null);
+    } else {
+      // Create new
+      const nId = Date.now().toString();
+      const nArt = {
+        id: nId,
+        category: activeCat,
+        title: newTitle,
+        content: newContent || '# New Article',
+        ratingUp: 0,
+        ratingDown: 0
+      };
+      setArticles(prev => [...prev, nArt]);
+      setViewArticleId(nId);
+      logAction(currentUser?.name, 'Created Knowledge Article', newTitle);
+    }
+    setNewTitle('');
+    setNewContent('');
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-8"
-    >
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <h2 className="text-3xl font-bold tracking-tight">Knowledge Hub</h2>
-          <span className="bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-widest border border-emerald-200">v2.0 Governance Active</span>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 pb-12">
+      
+      {/* ── TOP HEADER ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <BookOpen size={32} className="text-slate-900" />
+            Knowledge Hub
+          </h2>
+          <p className="text-slate-500 font-bold text-xs uppercase tracking-wider mt-1">
+            Notion-style wikis, Standard Operating Procedures, and corporate audit logs
+          </p>
         </div>
-        <p className="text-muted-foreground font-medium">Standard Operating Procedures, policies, and training resources centrally governed on SharePoint.</p>
+        <button onClick={() => { setEditingArticleId('new'); setNewTitle(''); setNewContent(''); }}
+          className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-slate-900/10">
+          <Plus size={14} /> Create Article
+        </button>
       </div>
 
-      {/* SEARCH HUB */}
-      <div className="card bg-primary p-10 text-white relative overflow-hidden">
-        <div className="relative z-10 max-w-xl">
-          <h3 className="text-xl font-bold mb-4">How can we help you today?</h3>
-          <div className="search-bar bg-white/10 border-white/20 h-14 px-6 focus-within:bg-white focus-within:text-foreground group transition-all">
-            <Search className="text-white group-focus-within:text-primary" size={20} />
+      {/* ── SEARCH CONTAINER ── */}
+      <div className="bg-slate-900 p-8 rounded-[2rem] text-white relative overflow-hidden shadow-xl border border-slate-800">
+        <div className="relative z-10 max-w-xl space-y-4">
+          <h3 className="text-xl font-black tracking-tight">Search Knowledge Ledger</h3>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
               type="text"
-              placeholder="Search policies, SOPs, training materials..."
-              className="text-white placeholder:text-white/50 group-focus-within:text-foreground group-focus-within:placeholder:text-muted-foreground"
+              placeholder="Search policies, SOPs, training manuals..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold outline-none placeholder:text-white/40 focus:bg-white focus:text-slate-900 transition-colors"
             />
           </div>
-          <div className="flex gap-4 mt-6 text-xs font-bold text-emerald-100">
-            <span>Popular:</span>
-            <button className="underline hover:text-white">Remote Work Policy</button>
-            <button className="underline hover:text-white">Tax Compliance SOP</button>
-            <button className="underline hover:text-white">Teams Training</button>
-          </div>
         </div>
-        <BookOpen className="absolute -right-10 -bottom-10 h-64 w-64 text-white/5 rotate-12" />
+        <BookOpen className="absolute -right-16 -bottom-16 h-72 w-72 text-white/5 rotate-12 pointer-events-none" />
       </div>
 
+      {/* ── MAIN WORKSPACE ── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* SIDEBAR CATEGORIES */}
-        <div className="space-y-2">
-          <KBCatItem label="System Guide" icon={<Globe size={18} />} active={activeCat === 'Guide'} onClick={() => setActiveCat('Guide')} />
-          <KBCatItem label="Governance Policies" icon={<ShieldCheck size={18} />} active={activeCat === 'Policies'} onClick={() => setActiveCat('Policies')} />
-          <KBCatItem label="SOPs (Procedures)" icon={<FileText size={18} />} active={activeCat === 'SOPs'} onClick={() => setActiveCat('SOPs')} />
-          <KBCatItem label="Training Center" icon={<Video size={18} />} active={activeCat === 'Training'} onClick={() => setActiveCat('Training')} />
-
-          <div className="mt-10 p-6 bg-slate-900 rounded-xl border border-slate-700 shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-              <MessageSquare size={60} />
+        
+        {/* Left Category Tree Sidebar */}
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm space-y-3">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Categories</h4>
+            <div className="space-y-1">
+              {['Guide', 'Policies', 'SOPs', 'Training'].map(cat => (
+                <button key={cat} onClick={() => { setActiveCat(cat); }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                    activeCat === cat ? 'bg-slate-100 text-slate-900' : 'text-slate-450 hover:bg-slate-50'
+                  }`}>
+                  <span>{cat}</span>
+                  <ChevronRight size={13} className={activeCat === cat ? 'text-slate-900' : 'text-slate-300'} />
+                </button>
+              ))}
             </div>
-            <h4 className="text-sm font-bold mb-1 text-white">Security Hotlink</h4>
-            <p className="text-[10px] text-slate-400 mb-4 font-medium">Immediate escalation for data breach or vault failures.</p>
-            <button className="w-full bg-red-600 hover:bg-red-500 text-white py-2 rounded text-[10px] font-black uppercase tracking-widest shadow-lg">Secure Comms</button>
+          </div>
+
+          <div className="p-5 bg-red-50 border border-red-100 rounded-3xl space-y-2">
+            <h4 className="text-[10px] font-black text-red-800 uppercase tracking-widest">Incident Escalation</h4>
+            <p className="text-[9px] text-red-600 font-bold uppercase leading-relaxed">Immediate secure line for operational anomalies.</p>
+            <button className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors">Emergency Comms</button>
           </div>
         </div>
 
-        {/* CONTENT AREA */}
-        <div className="lg:col-span-3 space-y-8">
-          {activeCat === 'Guide' ? (
-            <div className="space-y-8">
-              <div className="card p-8 bg-emerald-50/50 border-emerald-100 border-2">
-                <h3 className="text-2xl font-black text-emerald-900 mb-4 flex items-center gap-3"><Zap className="text-primary" /> ProjectFlow v2.0 Core Operations</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-emerald-800">1. Cryptographic Ingest</h4>
-                    <p className="text-xs text-emerald-700 leading-relaxed">Drag files directly into the portal. The system uses <strong>Smart-Tagging AI v2</strong> to analyze content payloads and automatically route files to their designated Department Hubs based on sensitivity.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-emerald-800">2. Immutable Ledger</h4>
-                    <p className="text-xs text-emerald-700 leading-relaxed">Every action (Upload, View, Sign) is recorded in a <strong>Blockchain-linked ledger</strong>. You can verify the mathematical integrity of any document in the Threat Intelligence Dashboard.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-emerald-800">3. Digital Certification</h4>
-                    <p className="text-xs text-emerald-700 leading-relaxed">Managers can apply <strong>PF-SIG Cryptographic Signatures</strong> to approved files. A Certified document generates a unique tamper-proof certificate embedded in the metadata.</p>
-                  </div>
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-emerald-800">4. Secure Multi-Format Export</h4>
-                    <p className="text-xs text-emerald-700 leading-relaxed">Export documents as <strong>PDF Envelopes, Word Nodes, or Excel Datasets</strong>. All exports include a Governance Wrapper ensuring content visibility on any device.</p>
-                  </div>
-                </div>
-              </div>
+        {/* Article Workspace (Center and Right columns) */}
+        <div className="lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Article Contents/Notion Editor (2 cols) */}
+          <div className="lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm flex flex-col justify-between min-h-[450px]">
+            
+            {/* ARTICLE DISPLAY MODE */}
+            {editingArticleId === null ? (
+              activeArticle ? (
+                <div className="space-y-6 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-950 leading-tight">{activeArticle.title}</h3>
+                        <p className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded mt-1.5 inline-block uppercase tracking-wider">{activeArticle.category}</p>
+                      </div>
+                      <button onClick={() => { setEditingArticleId(activeArticle.id); setNewTitle(activeArticle.title); setNewContent(activeArticle.content); }}
+                        className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-colors">
+                        <Edit3 size={15} />
+                      </button>
+                    </div>
 
-              {/* V2.5 REAL-TIME OPERATIONS MONITORING */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <div className="card bg-slate-900 text-white p-4">
-                  <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest mb-1">Global Vault Sync</p>
-                  <p className="text-2xl font-bold">99.98%</p>
-                  <div className="h-1 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
-                    <div className="h-full bg-emerald-500 w-[99.98%]"></div>
+                    <div className="prose prose-slate max-w-none text-xs leading-relaxed whitespace-pre-wrap font-sans text-slate-750 font-medium">
+                      {activeArticle.content}
+                    </div>
+                  </div>
+
+                  {/* Ratings */}
+                  <div className="flex justify-between items-center border-t border-slate-100 pt-4 mt-6">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Was this guide helpful?</span>
+                    <div className="flex items-center gap-3 text-xs font-black text-slate-600">
+                      <button onClick={() => handleRate(activeArticle.id, 'up')} className="flex items-center gap-1.5 hover:text-slate-900"><ThumbsUp size={13} /> {activeArticle.ratingUp}</button>
+                      <button onClick={() => handleRate(activeArticle.id, 'down')} className="flex items-center gap-1.5 hover:text-slate-900"><ThumbsDown size={13} /> {activeArticle.ratingDown}</button>
+                    </div>
                   </div>
                 </div>
-                <div className="card bg-slate-900 text-white p-4">
-                  <p className="text-[10px] font-black uppercase text-blue-400 tracking-widest mb-1">Active AI Scans</p>
-                  <p className="text-2xl font-bold">1,248</p>
-                  <div className="h-1 w-full bg-slate-800 rounded-full mt-2 overflow-hidden">
-                    <div className="h-full bg-blue-500 w-[85%]"></div>
-                  </div>
+              ) : (
+                <p className="text-center py-20 text-slate-400 italic text-xs">No article selected.</p>
+              )
+            ) : (
+              /* NOTION-STYLE ARTICLE EDITOR MODE */
+              <div className="space-y-5 flex-grow flex flex-col">
+                <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{editingArticleId === 'new' ? 'New Article Draft' : 'Edit Article Draft'}</span>
+                  <button onClick={() => setEditingArticleId(null)} className="p-1 hover:bg-slate-100 rounded text-slate-400"><X size={16} /></button>
                 </div>
-                <div className="card bg-slate-900 text-white p-4">
-                  <p className="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-1">Audit Ledger Head</p>
-                  <p className="text-xs font-mono truncate mt-1">0x7F2A...9E4C</p>
-                  <p className="text-[9px] text-slate-400 mt-2 font-bold animate-pulse">● Live Synchronization Active</p>
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold">Governance & Security Manuals</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ResourceCard title="Secure Envelope (HTML) User Guide" type="Vault" updated="Just Now" urgent />
-                  <ResourceCard title="How to Decrypt Vaulted Files" type="Guide" updated="Today" />
-                  <ResourceCard title="Managing Departmental AD Groups" type="Policy" updated="1 day ago" />
-                  <ResourceCard title="Reading the Threat Intel Heatmap" type="Guide" updated="Newly Added" />
+                <input type="text" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Article Title" className="w-full text-lg font-black outline-none border-b border-transparent focus:border-slate-100 pb-2" />
+                
+                {/* Notion format toolbar shortcuts */}
+                <div className="flex items-center gap-1 bg-slate-50 p-1.5 border border-slate-150 rounded-xl shrink-0">
+                  <button onClick={() => insertSlashCommand('h1')} title="Heading 1" className="p-1 hover:bg-white rounded"><Heading1 size={13} /></button>
+                  <button onClick={() => insertSlashCommand('h2')} title="Heading 2" className="p-1 hover:bg-white rounded"><Heading2 size={13} /></button>
+                  <button onClick={() => insertSlashCommand('list')} title="Bullet List" className="p-1 hover:bg-white rounded"><List size={13} /></button>
+                  <button onClick={() => insertSlashCommand('code')} title="Code Block" className="p-1 hover:bg-white rounded"><Code size={13} /></button>
+                  <button onClick={() => insertSlashCommand('quote')} title="Quote Block" className="p-1 hover:bg-white rounded"><Quote size={13} /></button>
                 </div>
-              </div>
 
-              <div className="card p-6 bg-emerald-50 border-emerald-100 mt-6">
-                <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2 mb-2">
-                  <ShieldCheck size={18} />
-                  New Feature: Standalone Secure Envelopes
-                </h4>
-                <p className="text-xs text-emerald-700 leading-relaxed">
-                  ProjectFlow v2.5 introduces <strong>Secure Envelopes</strong>. Documents with vault protection are now exported as self-decrypting HTML files.
-                  These files can be sent outside the platform but <strong>still require the original document password</strong> to be viewed.
-                  This ensures that sensitive Kakamega High School data remains protected even on local hard drives or email attachments.
-                </p>
+                <textarea value={newContent} onChange={e => setNewContent(e.target.value)} rows={12} placeholder="Write contents... Use slash commands formatting shortcuts above." className="w-full flex-grow bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono outline-none resize-none" />
+
+                <button onClick={handleSaveArticle} className="w-full py-3 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-slate-800 transition-all">
+                  Seal Article to Hub
+                </button>
+              </div>
+            )}
+
+          </div>
+
+          {/* Table of Contents & Related Panel (1 col) */}
+          <div className="lg:col-span-1 bg-white border border-slate-100 rounded-[2.5rem] p-6 shadow-sm space-y-6">
+            <div>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Table of Contents</h4>
+              <div className="space-y-2">
+                {tableOfContents.map((toc, idx) => (
+                  <p key={idx} style={{ pl: `${(toc.level - 1) * 3}px` }} className={`text-[10px] font-bold ${toc.level === 1 ? 'text-slate-800' : 'text-slate-450'}`}>
+                    {toc.text}
+                  </p>
+                ))}
+                {tableOfContents.length === 0 && <p className="text-[10px] text-slate-400 italic">No headings in document.</p>}
               </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                {activeCat} Library
-                <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded text-muted-foreground ml-2">8 Items</span>
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ResourceCard title="IT Remote Access Policy" type="Policy" updated="4 days ago" />
-                <ResourceCard title="Quarterly Tax Filing SOP" type="Procedure" updated="1 week ago" />
-                <ResourceCard title="Crisis Management Framework" type="Policy" updated="Newly Added" urgent />
-                <ResourceCard title="Regional SharePoint Governance" type="Policy" updated="1 month ago" />
-              </div>
-            </div>
-          )}
 
-          <div className="pt-8 border-t border-border">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2"><HelpCircle className="text-primary" /> Frequently Asked Questions</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FAQItem q="Why can't I see the Finance Hub?" a="Access is controlled via AD Group membership. If you aren't assigned to the Finance group, the hub remains invisible for zero-trust security." />
-              <FAQItem q="How do I verify a document hash?" a="Click the 'Threat Intelligence' icon in the top nav and check the Immutable Ledger. Compare the hash on your download with the ledger head." />
-              <FAQItem q="What is a 'Certified' status?" a="It means the document has been digitally signed by an authorized manager and its integrity is guaranteed by the ProjectFlow kernel." />
-              <FAQItem q="How do I request a Vault override?" a="Vault overrides are strictly prohibited. You must obtain the secondary cryptographic PIN from the document owner or a Global Admin." />
+            <div>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Related Guides</h4>
+              <div className="space-y-3">
+                {articles.filter(a => a.category === activeCat && a.id !== viewArticleId).map(rel => (
+                  <button key={rel.id} onClick={() => setViewArticleId(rel.id)} className="w-full text-left p-3 bg-slate-50 border border-slate-150 rounded-2xl hover:border-slate-250 transition-all flex justify-between items-center group">
+                    <span className="font-bold text-[10px] text-slate-700 truncate max-w-[130px]">{rel.title}</span>
+                    <ArrowRight size={12} className="text-slate-400 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
+
         </div>
+
       </div>
+
     </motion.div>
   );
 };
-
-const KBCatItem = ({ label, icon, active, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${active ? 'bg-primary text-white shadow-lg' : 'text-foreground hover:bg-muted'
-      }`}
-  >
-    {icon}
-    <span className="font-bold text-sm tracking-tight">{label}</span>
-    {active && <ChevronRight size={16} className="ml-auto" />}
-  </button>
-);
-
-const ResourceCard = ({ title, type, updated, urgent }) => (
-  <div className={`card p-5 group hover:border-primary transition-all cursor-pointer relative ${urgent ? 'border-primary/40 bg-emerald-50/10' : ''}`}>
-    {urgent && <div className="absolute top-0 right-0 h-2 w-2 bg-primary rounded-bl-lg"></div>}
-    <div className="flex justify-between items-start mb-3">
-      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-        <FileText size={20} />
-      </div>
-      <ExternalLink size={16} className="text-muted-foreground group-hover:text-primary" />
-    </div>
-    <h4 className="font-bold text-sm mb-1 group-hover:text-primary transition-colors">{title}</h4>
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] font-bold text-primary uppercase">{type}</span>
-      <span className="text-[10px] text-muted-foreground">• Updated {updated}</span>
-    </div>
-  </div>
-);
-
-const FAQItem = ({ q, a }) => (
-  <div className="card p-4 hover:shadow-md transition-shadow cursor-pointer">
-    <h4 className="text-sm font-bold flex items-center gap-2 mb-2">
-      <HelpCircle size={16} className="text-primary" />
-      {q}
-    </h4>
-    <p className="text-xs text-muted-foreground pl-6 border-l-2 border-primary/20 ml-2">{a}</p>
-  </div>
-);
 
 export default KnowledgeBase;

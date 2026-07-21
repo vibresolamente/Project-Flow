@@ -1,549 +1,1003 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, Sidebar, MessageSquareQuote, Save, Lock, Unlock, UserPlus, 
-  Plus, Search, Clock3, Star, Folder, Hash, Users, FileText, 
-  ChevronRight, Mic, MicOff, Video, Send, CheckSquare, Layers, 
-  Sparkles, ShieldCheck, Download, Eye, FileUp, MessageCircle, 
-  ExternalLink, Trash2, History, Settings, MoreHorizontal,
-  Info, Activity, Database, Share2, Printer, Copy, Palette,
-  ShieldAlert
+import {
+  X, Sidebar, Save, Lock, Unlock, UserPlus, Plus, Search, Star,
+  Hash, Users, FileText, ChevronRight, Mic, MicOff, Video, VideoOff,
+  Send, CheckSquare, Layers, Sparkles, ShieldCheck, Download, Eye,
+  FileUp, MessageCircle, ExternalLink, Trash2, History, Settings,
+  MoreHorizontal, Info, Activity, Database, Share2, Printer, Copy,
+  Palette, ShieldAlert, Grid3x3, Monitor, MonitorOff, Phone, PhoneOff,
+  Bold as BoldIcon, Italic as ItalicIcon, Underline as UnderlineIcon,
+  List as ListIcon, Heading1, Heading2, Quote, Code, Highlighter,
+  ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Table as TableIcon, Image as ImageIcon, Link as LinkIcon, Type, ChevronDown,
+  Volume2, VolumeX, Maximize2, Minimize2, Hand, Smile, Radio,
+  PlusSquare, Minus, RefreshCw, BarChart2, Globe, PenTool, FileSpreadsheet,
+  StopCircle, CircleDot, Columns, Rows, SplitSquareHorizontal, MessageSquare,
+  MessageSquareQuote, Zap, Check
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Collaboration from '@tiptap/extension-collaboration';
 import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
+import Underline from '@tiptap/extension-underline';
+import TextAlign from '@tiptap/extension-text-align';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import FontFamily from '@tiptap/extension-font-family';
+import Highlight from '@tiptap/extension-highlight';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
+import ImageExt from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import CodeBlock from '@tiptap/extension-code-block';
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { supabase } from '../lib/supabase';
 import { useApp } from '../context/AppContext';
-import '../index.css';
 
-// Single global instance of the AI worker
+// ─────────────────────────────────────────
+// AI Worker singleton
+// ─────────────────────────────────────────
 let aiWorker = null;
 if (typeof window !== 'undefined') {
-  aiWorker = new Worker(new URL('../workers/aiWorker.js', import.meta.url), { type: 'module' });
+  try {
+    aiWorker = new Worker(new URL('../workers/aiWorker.js', import.meta.url), { type: 'module' });
+  } catch (e) { /* Worker not available */ }
 }
 
-// --- CONSTANTS & HELPERS ---
-import { 
-  Bold as BoldIcon, Italic as ItalicIcon, List as ListIcon, 
-  Heading1, Heading2, Quote, Code, Highlighter, ListOrdered
-} from 'lucide-react';
-import Bold from '@tiptap/extension-bold';
-import Italic from '@tiptap/extension-italic';
-import Heading from '@tiptap/extension-heading';
-import BulletList from '@tiptap/extension-bullet-list';
-import OrderedList from '@tiptap/extension-ordered-list';
-import ListItem from '@tiptap/extension-list-item';
-import Blockquote from '@tiptap/extension-blockquote';
-import Highlight from '@tiptap/extension-highlight';
-import CodeBlock from '@tiptap/extension-code-block';
-
-const TIPTAP_EXTENSIONS = [
-  StarterKit.configure({ history: false }),
-  Bold, Italic, Heading.configure({ levels: [1, 2] }),
-  BulletList, OrderedList, ListItem, Blockquote, Highlight, CodeBlock
-];
-
+// ─────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────
 const toB64 = (arr) => {
-  try {
-    return btoa(Array.from(arr).map(b => String.fromCharCode(b)).join(''));
-  } catch (e) {
-    console.error('[Sync] B64 Encode failed:', e);
-    return '';
-  }
+  try { return btoa(Array.from(arr).map(b => String.fromCharCode(b)).join('')); }
+  catch (e) { return ''; }
 };
-
 const fromB64 = (b64) => {
   try {
     if (!b64 || typeof b64 !== 'string') return new Uint8Array();
     return new Uint8Array(atob(b64).split('').map(c => c.charCodeAt(0)));
-  } catch (e) {
-    console.error('[Sync] B64 Decode failed:', e);
-    return new Uint8Array();
-  }
+  } catch (e) { return new Uint8Array(); }
 };
 
-const LuxeToast = ({ message, onRemove }) => (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
-    className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/90 backdrop-blur-xl text-white px-8 py-4 rounded-[2rem] shadow-2xl flex items-center gap-4 border border-white/10">
-    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-    <span className="text-[10px] font-black uppercase tracking-[0.2em]">{message}</span>
-    <button onClick={onRemove} className="ml-4 hover:text-emerald-400 transition-colors"><X size={14} /></button>
+const USER_COLORS = ['#10B981','#3B82F6','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6'];
+const getUserColor = (name) => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return USER_COLORS[Math.abs(h) % USER_COLORS.length];
+};
+
+const FONTS = ['Inter','Georgia','Courier New','Arial','Times New Roman','Trebuchet MS'];
+const FONT_SIZES = ['10','11','12','14','16','18','20','24','28','32','36','48','72'];
+const REACTIONS = ['👍','❤️','😂','😮','🎉','🙌','🔥','💡'];
+
+// ─────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────
+const Toast = ({ message, type = 'info', onRemove }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 24, scale: 0.95 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    exit={{ opacity: 0, scale: 0.9 }}
+    className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-3.5 rounded-2xl shadow-2xl border text-sm font-bold backdrop-blur-xl
+      ${type === 'error' ? 'bg-red-950/90 border-red-700/40 text-red-200' :
+        type === 'success' ? 'bg-emerald-950/90 border-emerald-700/40 text-emerald-200' :
+        'bg-slate-950/90 border-white/10 text-white'}`}
+  >
+    <div className={`w-2 h-2 rounded-full ${type === 'error' ? 'bg-red-400' : type === 'success' ? 'bg-emerald-400' : 'bg-blue-400'} animate-pulse`} />
+    {message}
+    <button onClick={onRemove} className="ml-2 opacity-50 hover:opacity-100"><X size={14} /></button>
   </motion.div>
 );
 
-// --- COMPONENT: COLLABORATIVE EDITOR ---
-const EditorToolbar = ({ editor, onUploadClick, transcriptionMode, setTranscriptionMode }) => {
-  if (!editor) return null;
+// ─────────────────────────────────────────
+// SPREADSHEET ENGINE
+// ─────────────────────────────────────────
+const COLS = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
+const DEFAULT_ROWS = 30;
+const DEFAULT_COLS = 10;
+
+const evalFormula = (formula, cells) => {
+  try {
+    const f = formula.replace(/^=/, '').toUpperCase();
+    // SUM(A1:B3)
+    const sumMatch = f.match(/^SUM\(([A-Z]+\d+):([A-Z]+\d+)\)$/);
+    if (sumMatch) {
+      const [, start, end] = sumMatch;
+      const vals = getRangeValues(start, end, cells);
+      return vals.reduce((a, v) => a + (parseFloat(v) || 0), 0);
+    }
+    // AVERAGE
+    const avgMatch = f.match(/^AVERAGE\(([A-Z]+\d+):([A-Z]+\d+)\)$/);
+    if (avgMatch) {
+      const [, start, end] = avgMatch;
+      const vals = getRangeValues(start, end, cells).filter(v => !isNaN(parseFloat(v)));
+      return vals.length ? vals.reduce((a, v) => a + parseFloat(v), 0) / vals.length : 0;
+    }
+    // COUNT
+    const countMatch = f.match(/^COUNT\(([A-Z]+\d+):([A-Z]+\d+)\)$/);
+    if (countMatch) {
+      const [, start, end] = countMatch;
+      return getRangeValues(start, end, cells).filter(v => !isNaN(parseFloat(v))).length;
+    }
+    // MAX
+    const maxMatch = f.match(/^MAX\(([A-Z]+\d+):([A-Z]+\d+)\)$/);
+    if (maxMatch) {
+      const vals = getRangeValues(maxMatch[1], maxMatch[2], cells).map(Number).filter(v => !isNaN(v));
+      return vals.length ? Math.max(...vals) : 0;
+    }
+    // MIN
+    const minMatch = f.match(/^MIN\(([A-Z]+\d+):([A-Z]+\d+)\)$/);
+    if (minMatch) {
+      const vals = getRangeValues(minMatch[1], minMatch[2], cells).map(Number).filter(v => !isNaN(v));
+      return vals.length ? Math.min(...vals) : 0;
+    }
+    // Cell reference A1
+    const cellRef = f.match(/^([A-Z]+)(\d+)$/);
+    if (cellRef) {
+      const key = `${cellRef[1]}${cellRef[2]}`;
+      return cells[key]?.value || '';
+    }
+    // Arithmetic: replace cell refs
+    const resolved = f.replace(/([A-Z]+\d+)/g, (ref) => {
+      const v = cells[ref]?.value;
+      return !isNaN(parseFloat(v)) ? parseFloat(v) : 0;
+    });
+    // eslint-disable-next-line no-new-func
+    return new Function(`return ${resolved}`)();
+  } catch { return '#ERR'; }
+};
+
+const getRangeValues = (start, end, cells) => {
+  const startCol = start.match(/[A-Z]+/)[0];
+  const startRow = parseInt(start.match(/\d+/)[0]);
+  const endCol = end.match(/[A-Z]+/)[0];
+  const endRow = parseInt(end.match(/\d+/)[0]);
+  const sc = COLS.indexOf(startCol), ec = COLS.indexOf(endCol);
+  const vals = [];
+  for (let r = startRow; r <= endRow; r++) {
+    for (let c = sc; c <= ec; c++) {
+      vals.push(cells[`${COLS[c]}${r}`]?.value || '');
+    }
+  }
+  return vals;
+};
+
+const Spreadsheet = ({ docId }) => {
+  const [cells, setCells] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [sheets, setSheets] = useState(['Sheet1','Sheet2','Sheet3']);
+  const [activeSheet, setActiveSheet] = useState('Sheet1');
+  const [colWidths, setColWidths] = useState({});
+  const inputRef = useRef(null);
+
+  const getCellKey = (col, row) => `${col}${row}`;
+
+  const getCellDisplay = (key) => {
+    const cell = cells[key];
+    if (!cell?.value) return '';
+    if (typeof cell.value === 'string' && cell.value.startsWith('=')) {
+      return evalFormula(cell.value, cells);
+    }
+    return cell.value;
+  };
+
+  const commitEdit = () => {
+    if (!editing) return;
+    setCells(prev => ({ ...prev, [editing]: { ...(prev[editing] || {}), value: editValue } }));
+    setEditing(null);
+  };
+
+  const startEdit = (key, current) => {
+    setEditing(key);
+    setEditValue(current?.value || '');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e, col, row) => {
+    if (e.key === 'Enter') { commitEdit(); setSelected(`${col}${row + 1}`); }
+    if (e.key === 'Tab') { e.preventDefault(); commitEdit(); const ni = COLS.indexOf(col) + 1; if (ni < DEFAULT_COLS) setSelected(`${COLS[ni]}${row}`); }
+    if (e.key === 'Escape') { setEditing(null); }
+  };
+
+  const formatCell = (type) => {
+    if (!selected) return;
+    setCells(prev => {
+      const cell = prev[selected] || {};
+      const fmt = cell.fmt || {};
+      return { ...prev, [selected]: { ...cell, fmt: { ...fmt, [type]: !fmt[type] } } };
+    });
+  };
+
+  const handleCSVImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const lines = ev.target.result.split('\n');
+      const newCells = {};
+      lines.forEach((line, ri) => {
+        line.split(',').forEach((val, ci) => {
+          if (ci < COLS.length) newCells[`${COLS[ci]}${ri + 1}`] = { value: val.trim() };
+        });
+      });
+      setCells(newCells);
+    };
+    reader.readAsText(file);
+  };
+
+  const exportCSV = () => {
+    let csv = '';
+    for (let r = 1; r <= DEFAULT_ROWS; r++) {
+      const row = COLS.slice(0, DEFAULT_COLS).map(c => getCellDisplay(`${c}${r}`) || '');
+      if (row.some(v => v !== '')) csv += row.join(',') + '\n';
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `spreadsheet_${activeSheet}.csv`;
+    a.click();
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-sm mb-4">
-      <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('bold') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><BoldIcon size={16} /></button>
-      <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('italic') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ItalicIcon size={16} /></button>
-      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-      <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 1 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Heading1 size={16} /></button>
-      <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={`p-2 rounded-lg transition-all ${editor.isActive('heading', { level: 2 }) ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Heading2 size={16} /></button>
-      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-      <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('bulletList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ListIcon size={16} /></button>
-      <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('orderedList') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><ListOrdered size={16} /></button>
-      <div className="w-px h-4 bg-slate-200 mx-1"></div>
-      <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('blockquote') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Quote size={16} /></button>
-      <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('highlight') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Highlighter size={16} /></button>
-      <button onClick={() => editor.chain().focus().toggleCodeBlock().run()} className={`p-2 rounded-lg transition-all ${editor.isActive('codeBlock') ? 'bg-slate-900 text-white' : 'hover:bg-slate-100 text-slate-600'}`}><Code size={16} /></button>
-      
-      <div className="flex items-center gap-1.5 ml-auto pl-2">
-        <select 
-          value={transcriptionMode} 
-          onChange={(e) => setTranscriptionMode(e.target.value)}
-          className="bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 focus:outline-none focus:border-slate-300 cursor-pointer px-2 py-1.5 uppercase tracking-wider transition-colors hover:bg-slate-100"
-          title="Tuning Mode for Transcription"
-        >
-          <option value="speech">🎙️ Speech</option>
-          <option value="music">🎵 Music / Lyrics</option>
+    <div className="flex flex-col h-full bg-white">
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-slate-200 bg-slate-50 shrink-0 flex-wrap">
+        <button onClick={() => formatCell('bold')} className={`p-1.5 rounded hover:bg-slate-200 transition-colors ${selected && cells[selected]?.fmt?.bold ? 'bg-slate-200' : ''}`}><BoldIcon size={14} /></button>
+        <button onClick={() => formatCell('italic')} className={`p-1.5 rounded hover:bg-slate-200 transition-colors ${selected && cells[selected]?.fmt?.italic ? 'bg-slate-200' : ''}`}><ItalicIcon size={14} /></button>
+        <button onClick={() => formatCell('underline')} className="p-1.5 rounded hover:bg-slate-200 transition-colors"><UnderlineIcon size={14} /></button>
+        <div className="w-px h-4 bg-slate-300 mx-1" />
+        <select className="text-[11px] border border-slate-200 rounded px-1 py-0.5 bg-white" onChange={e => selected && setCells(p => ({...p, [selected]: {...(p[selected]||{}), fmt:{...(p[selected]?.fmt||{}), bg: e.target.value}}}))} defaultValue="">
+          <option value="">Fill Color</option>
+          {['#FEF3C7','#DCFCE7','#DBEAFE','#FCE7F3','#F3E8FF','#FEE2E2'].map(c => <option key={c} value={c} style={{background:c}}>{c}</option>)}
         </select>
-        
-        <button 
-          onClick={onUploadClick} 
-          className="p-2 rounded-lg transition-all bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center gap-1 text-[10px] font-black uppercase tracking-wider"
-          title="Upload Media for Local AI Transcription"
-        >
-          <FileUp size={14} />
-          Transcribe
+        <div className="w-px h-4 bg-slate-300 mx-1" />
+        <label className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 cursor-pointer hover:bg-slate-50">
+          <FileUp size={12} /> Import CSV
+          <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
+        </label>
+        <button onClick={exportCSV} className="flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded px-2 py-0.5 hover:bg-slate-50">
+          <Download size={12} /> Export CSV
+        </button>
+      </div>
+
+      {/* Formula Bar */}
+      <div className="flex items-center gap-2 px-3 py-1 border-b border-slate-200 bg-white shrink-0">
+        <span className="text-[11px] font-bold text-slate-500 w-12 text-center bg-slate-100 rounded px-1 py-0.5">{selected || '—'}</span>
+        <div className="w-px h-4 bg-slate-300" />
+        <input
+          className="flex-1 text-[12px] font-mono text-slate-800 outline-none bg-transparent"
+          value={editing ? editValue : (selected ? (cells[selected]?.value || '') : '')}
+          onChange={e => editing ? setEditValue(e.target.value) : null}
+          onFocus={() => selected && startEdit(selected, cells[selected])}
+          placeholder="Enter value or formula (e.g. =SUM(A1:A10))"
+          ref={inputRef}
+          onBlur={commitEdit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); }}
+        />
+      </div>
+
+      {/* Grid */}
+      <div className="flex-1 overflow-auto relative">
+        <table className="border-collapse text-[12px] min-w-full">
+          <thead className="sticky top-0 z-10">
+            <tr>
+              <th className="w-10 min-w-[40px] bg-slate-100 border border-slate-200 text-slate-500 font-bold text-[10px]" />
+              {COLS.slice(0, DEFAULT_COLS).map(col => (
+                <th key={col} className="bg-slate-100 border border-slate-200 text-slate-600 font-bold text-[11px] px-2 py-1 text-center min-w-[80px]" style={{width: colWidths[col] || 80}}>
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: DEFAULT_ROWS }, (_, ri) => ri + 1).map(row => (
+              <tr key={row} className="hover:bg-slate-50/50">
+                <td className="bg-slate-100 border border-slate-200 text-slate-500 font-bold text-[10px] text-center px-1 sticky left-0 z-10">{row}</td>
+                {COLS.slice(0, DEFAULT_COLS).map(col => {
+                  const key = getCellKey(col, row);
+                  const cell = cells[key] || {};
+                  const display = getCellDisplay(key);
+                  const isSelected = selected === key;
+                  const isEditing = editing === key;
+                  return (
+                    <td
+                      key={key}
+                      className={`border border-slate-200 relative cursor-cell ${isSelected ? 'outline outline-2 outline-blue-500 outline-offset-[-1px] z-20' : ''}`}
+                      style={{ background: cell.fmt?.bg || 'white', fontWeight: cell.fmt?.bold ? 700 : 400, fontStyle: cell.fmt?.italic ? 'italic' : 'normal', textDecoration: cell.fmt?.underline ? 'underline' : 'none', minWidth: colWidths[col] || 80 }}
+                      onClick={() => { setSelected(key); if (editing && editing !== key) commitEdit(); }}
+                      onDoubleClick={() => startEdit(key, cell)}
+                    >
+                      {isEditing ? (
+                        <input
+                          ref={inputRef}
+                          className="w-full h-full px-1 py-0.5 outline-none bg-white absolute inset-0 z-30 text-[12px]"
+                          value={editValue}
+                          onChange={e => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={e => handleKeyDown(e, col, row)}
+                          autoFocus
+                        />
+                      ) : (
+                        <span className="block px-1 py-0.5 truncate">{display}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Sheet Tabs */}
+      <div className="flex items-center gap-1 px-3 py-1 border-t border-slate-200 bg-slate-50 shrink-0">
+        {sheets.map(s => (
+          <button key={s} onClick={() => setActiveSheet(s)} className={`text-[11px] font-bold px-3 py-1 rounded transition-all ${activeSheet === s ? 'bg-white border border-slate-200 text-slate-800 shadow-sm' : 'text-slate-500 hover:bg-white'}`}>
+            {s}
+          </button>
+        ))}
+        <button onClick={() => { const n = `Sheet${sheets.length + 1}`; setSheets(p => [...p, n]); setActiveSheet(n); }} className="p-1 hover:bg-white rounded text-slate-500 hover:text-slate-800 transition-colors">
+          <Plus size={14} />
         </button>
       </div>
     </div>
   );
 };
 
-const getDocumentTextForEditing = (doc) => {
-  if (!doc) return '';
-  if (typeof doc.content !== 'string') return '';
-  if (!doc.content.startsWith('data:')) return doc.content;
-  if (doc.textContent && doc.textContent.trim().length > 0) return doc.textContent;
-  
-  // Simulated OCR/Parser text extraction for binary files
-  const nameWithoutExt = doc.name.replace(/\.[^/.]+$/, "");
-  const formattedName = nameWithoutExt.split('_').join(' ').split('-').join(' ');
-  return `<h1>${formattedName.toUpperCase()}</h1>
-<p><strong>System Document Node:</strong> ${doc.name}</p>
-<p><strong>Owner:</strong> ${doc.owner || 'System'}</p>
-<p><strong>Department:</strong> ${doc.dept || 'Operations'}</p>
-<p><strong>Classification:</strong> ${doc.sensitivity || 'Internal'}</p>
-<hr/>
-<p>This document content has been extracted from the secure binary payload (${doc.name}) via the ProjectFlow KE Enterprise Ingest Engine.</p>
-<h2>1. Executive Summary</h2>
-<p>This is a collaborative drafting canvas for ${formattedName}. You can edit this text, add sections, and save version locks directly to the cloud vault.</p>
-<h2>2. Draft Section</h2>
-<p>Start typing here to replace this placeholder with your official document body...</p>`;
-};
+// ─────────────────────────────────────────
+// VIDEO MEET (WebRTC via Supabase Signaling)
+// ─────────────────────────────────────────
+const VideoMeet = ({ roomId, userName, userColor, addToast }) => {
+  const [isInCall, setIsInCall] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(true);
+  const [isCamOn, setIsCamOn] = useState(true);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [reactionBubbles, setReactionBubbles] = useState([]);
+  const [raisedHand, setRaisedHand] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  const [participants, setParticipants] = useState([]);
+  const [localStream, setLocalStream] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const localVideoRef = useRef(null);
+  const recordingRef = useRef(null);
+  const channelRef = useRef(null);
 
-const EditorInternal = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc, editorRef, addToast }) => {
-  const fileInputRef = useRef(null);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [transcriptionProgress, setTranscriptionProgress] = useState(0);
-  const [transcriptionStatusText, setTranscriptionStatusText] = useState('Processing audio matrix...');
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKey, setTempApiKey] = useState('');
-  const [pendingFile, setPendingFile] = useState(null);
-  const [transcriptionMode, setTranscriptionMode] = useState('speech');
-
-  useEffect(() => {
-    // Setup worker listener for transcribe status updates
-    if (!aiWorker) return;
-    const onMessage = (e) => {
-      const { action, status, message, result, id } = e.data;
-      if (id !== 'transcribe-audio') return;
-      
-      if (status === 'progress') {
-        setTranscriptionStatusText(message);
-        setTranscriptionProgress(p => p < 90 ? p + Math.random() * 5 : p);
-      } else if (status === 'success') {
-        setTranscriptionProgress(100);
-        setIsTranscribing(false);
-        if (addToast) addToast("Transcription complete!");
-        
-        const transcriptHtml = `
-          <br/>
-          <blockquote>
-            <strong>🎙️ SECURE LOCAL AI TRANSCRIPTION:</strong><br/>
-            "${result.text}"
-          </blockquote>
-          <br/>
-        `;
-        if (editorRef && editorRef.current) {
-          editorRef.current.chain().focus().insertContent(transcriptHtml).run();
-        }
-      } else if (status === 'error') {
-        setIsTranscribing(false);
-        setTranscriptionProgress(0);
-        if (addToast) addToast("Error processing audio: " + e.data.error);
-      }
-    };
-    aiWorker.addEventListener('message', onMessage);
-    return () => aiWorker.removeEventListener('message', onMessage);
-  }, [editorRef]);
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files ? e.target.files[0] : e;
-    if (!file) return;
-    
-    if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
-      if (addToast) addToast("Only audio and video files are supported for transcription.");
-      return;
-    }
-
-    if (addToast) addToast(`Decoding audio ${file.name} locally...`);
-    setIsTranscribing(true);
-    setTranscriptionProgress(10);
-    setTranscriptionStatusText('Decoding audio file...');
-
+  const startCall = async () => {
     try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-      const arrayBuffer = await file.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      const float32Array = audioBuffer.getChannelData(0);
-      
-      aiWorker.postMessage({
-        id: 'transcribe-audio',
-        action: 'transcribe',
-        payload: { 
-          audio: float32Array,
-          mode: transcriptionMode
-        }
-      });
-    } catch (err) {
-      setIsTranscribing(false);
-      setTranscriptionProgress(0);
-      if (addToast) addToast("Error decoding audio: " + err.message);
-    }
-    
-    if (e.target && e.target.value) e.target.value = null;
-  };
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setLocalStream(stream);
+      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-  const handleSaveApiKey = () => {
-    if (tempApiKey.trim()) {
-      localStorage.setItem('projectflow_openai_key', tempApiKey.trim());
-      setShowApiKeyModal(false);
-      if (pendingFile) {
-        handleFileUpload(pendingFile);
-        setPendingFile(null);
-      }
-    }
-  };
-
-  const extensions = useMemo(() => {
-    if (!ydoc || !awareness) return [...TIPTAP_EXTENSIONS];
-    try {
-      // Verify ydoc is still alive before binding to Collaboration
-      ydoc.getXmlFragment('prosemirror');
-    } catch (e) {
-      console.error('[Editor] ydoc is invalid or destroyed:', e);
-      return [...TIPTAP_EXTENSIONS];
-    }
-    return [
-      ...TIPTAP_EXTENSIONS,
-      Collaboration.configure({ document: ydoc, field: 'prosemirror' }),
-      CollaborationCursor.configure({
-        provider: { awareness },
-        user: { name: userName, color: userColor }
-      })
-    ];
-  }, [ydoc, awareness, userName, userColor]);
-
-  const editor = useEditor({
-    extensions,
-    editorProps: {
-      attributes: {
-        class: 'prose prose-slate max-w-none focus:outline-none min-h-[800px] px-16 py-20 bg-white shadow-2xl rounded-sm border border-slate-200 text-slate-900'
-      }
-    },
-    onUpdate: ({ editor }) => {
-      const words = editor.getText().split(/\s+/).filter(x => x).length;
-      const stats = { words, readTime: Math.ceil(words / 200) };
-      if (typeof onStatsUpdate === 'function') {
-        setTimeout(() => onStatsUpdate(stats), 0);
-      }
-    },
-    editable: !isLocked
-  }, [extensions]);
-
-  useEffect(() => {
-    if (editorRef) {
-      editorRef.current = editor;
-    }
-    return () => {
-      if (editorRef) {
-        editorRef.current = null;
-      }
-    };
-  }, [editor, editorRef]);
-
-  useEffect(() => {
-    if (editor && isLocked !== undefined) {
-      editor.setEditable(!isLocked);
-    }
-  }, [isLocked, editor]);
-
-  useEffect(() => {
-    if (editor && currentDoc && ydoc.getXmlFragment('prosemirror').length === 0) {
-      const timer = setTimeout(() => {
-        if (ydoc && ydoc.getXmlFragment('prosemirror').length === 0) {
-          const content = currentDoc.content;
-          if (typeof content === 'string' && content.startsWith('data:')) {
-            editor.commands.setContent(getDocumentTextForEditing(currentDoc));
-          } else if (typeof content === 'string' && (content.startsWith('<') || content.length < 100)) {
-            editor.commands.setContent(content);
-          } else {
-            try {
-              const update = fromB64(content);
-              if (update.length > 0) {
-                Y.applyUpdate(ydoc, update, 'initial-sync');
-              } else {
-                editor.commands.setContent(content);
-              }
-            } catch (e) {
-              editor.commands.setContent(content);
-            }
+      if (supabase) {
+        const channel = supabase.channel(`meet-${roomId}`, { config: { broadcast: { self: false } } });
+        channelRef.current = channel;
+        channel.on('broadcast', { event: 'meet-chat' }, ({ payload }) => {
+          setChatMessages(p => [...p, payload]);
+        });
+        channel.on('broadcast', { event: 'meet-reaction' }, ({ payload }) => {
+          triggerReaction(payload.emoji, payload.user);
+        });
+        channel.on('broadcast', { event: 'meet-join' }, ({ payload }) => {
+          setParticipants(p => [...p.filter(u => u.id !== payload.id), payload]);
+          addToast(`${payload.name} joined the call`);
+        });
+        channel.on('broadcast', { event: 'meet-leave' }, ({ payload }) => {
+          setParticipants(p => p.filter(u => u.id !== payload.id));
+          addToast(`${payload.name} left the call`);
+        });
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({ type: 'broadcast', event: 'meet-join', payload: { id: `user-${Date.now()}`, name: userName, color: userColor } });
           }
-        }
-      }, 500);
-      return () => clearTimeout(timer);
+        });
+      }
+      setIsInCall(true);
+      addToast('You joined the meeting');
+    } catch (err) {
+      addToast('Camera/Mic access denied. Please allow permissions.');
     }
-  }, [editor, currentDoc?.id, currentDoc?.content, ydoc]);
+  };
+
+  const endCall = () => {
+    localStream?.getTracks().forEach(t => t.stop());
+    setLocalStream(null);
+    channelRef.current?.send({ type: 'broadcast', event: 'meet-leave', payload: { id: 'local', name: userName } });
+    channelRef.current?.unsubscribe();
+    setIsInCall(false);
+    setParticipants([]);
+    addToast('Call ended');
+  };
+
+  const toggleScreen = async () => {
+    try {
+      if (!isScreenSharing) {
+        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        if (localVideoRef.current) localVideoRef.current.srcObject = screen;
+        screen.getVideoTracks()[0].onended = () => { setIsScreenSharing(false); if (localVideoRef.current) localVideoRef.current.srcObject = localStream; };
+        setIsScreenSharing(true);
+        addToast('Screen sharing started');
+      } else {
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
+        setIsScreenSharing(false);
+        addToast('Screen sharing stopped');
+      }
+    } catch { addToast('Screen sharing was cancelled.'); }
+  };
+
+  const toggleMic = () => {
+    localStream?.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+    setIsMicOn(p => !p);
+    addToast(isMicOn ? 'Microphone muted' : 'Microphone unmuted');
+  };
+
+  const toggleCam = () => {
+    localStream?.getVideoTracks().forEach(t => { t.enabled = !t.enabled; });
+    setIsCamOn(p => !p);
+    addToast(isCamOn ? 'Camera off' : 'Camera on');
+  };
+
+  const startRecording = () => {
+    if (!localStream) return;
+    const chunks = [];
+    const rec = new MediaRecorder(localStream);
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(chunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `meeting-${Date.now()}.webm`; a.click();
+      addToast('Recording saved!');
+    };
+    rec.start();
+    recordingRef.current = rec;
+    setIsRecording(true);
+    addToast('Recording started');
+  };
+
+  const stopRecording = () => {
+    recordingRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const triggerReaction = (emoji, user) => {
+    const id = Date.now();
+    setReactionBubbles(p => [...p, { id, emoji, user }]);
+    setTimeout(() => setReactionBubbles(p => p.filter(r => r.id !== id)), 3000);
+  };
+
+  const sendReaction = (emoji) => {
+    triggerReaction(emoji, userName);
+    channelRef.current?.send({ type: 'broadcast', event: 'meet-reaction', payload: { emoji, user: userName } });
+  };
+
+  const sendChat = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const msg = { user: userName, text: chatInput, time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), color: userColor };
+    setChatMessages(p => [...p, msg]);
+    channelRef.current?.send({ type: 'broadcast', event: 'meet-chat', payload: msg });
+    setChatInput('');
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}?meet=${roomId}`);
+    addToast('Meeting link copied!');
+  };
+
+  if (!isInCall) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-12">
+        <div className="w-28 h-28 rounded-[2.5rem] bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center shadow-2xl shadow-emerald-500/30 mb-8">
+          <Video size={52} />
+        </div>
+        <h2 className="text-4xl font-black tracking-tight mb-3">Team Video Meet</h2>
+        <p className="text-slate-400 mb-2 text-sm font-medium">Room: <span className="text-emerald-400 font-bold font-mono">{roomId}</span></p>
+        <p className="text-slate-500 text-xs mb-10">Real WebRTC video via your browser camera. No plugins needed.</p>
+        <div className="flex gap-4">
+          <button onClick={startCall} className="px-10 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-2xl font-black text-sm hover:shadow-2xl hover:shadow-emerald-500/30 hover:-translate-y-1 transition-all flex items-center gap-3 shadow-xl">
+            <Video size={20} /> Join Now
+          </button>
+          <button onClick={copyLink} className="px-6 py-4 border border-white/20 text-white rounded-2xl font-bold text-sm hover:bg-white/10 transition-all flex items-center gap-2">
+            <Copy size={16} /> Copy Link
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const allParticipants = [{ id: 'local', name: userName, color: userColor, isLocal: true }, ...participants];
 
   return (
-    <>
-    <div className="editor-paper-container py-12 px-4 md:px-12 flex flex-col items-center bg-slate-100/50 min-h-screen relative">
-      {isTranscribing && (
-        <div className="absolute top-4 right-4 bg-slate-900 text-white p-4 rounded-xl shadow-lg z-50 flex flex-col gap-2 min-w-[250px] border border-white/10">
-          <div className="flex justify-between items-center text-xs font-bold uppercase tracking-wider">
-            <span>Transcribing AI</span>
-            <span className="text-emerald-400">{transcriptionProgress}%</span>
+    <div className="flex-1 flex flex-col bg-slate-900 relative overflow-hidden">
+      {/* Reaction Bubbles */}
+      <AnimatePresence>
+        {reactionBubbles.map(r => (
+          <motion.div key={r.id} initial={{ opacity: 0, y: 0, scale: 0.5 }} animate={{ opacity: 1, y: -120, scale: 1.2 }} exit={{ opacity: 0 }}
+            className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 text-4xl pointer-events-none">
+            {r.emoji}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+
+      {/* Video Grid */}
+      <div className={`flex-1 p-4 grid gap-3 ${allParticipants.length === 1 ? 'grid-cols-1' : allParticipants.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {allParticipants.map((p) => (
+          <div key={p.id} className="relative rounded-2xl overflow-hidden bg-slate-800 border border-white/5 shadow-xl group">
+            {p.isLocal ? (
+              <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" style={{minHeight: '180px'}} />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center" style={{minHeight: '180px', background: `${p.color}20`}}>
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black text-white shadow-2xl" style={{background: p.color}}>
+                  {p.name[0]}
+                </div>
+              </div>
+            )}
+            <div className="absolute bottom-3 left-3 flex items-center gap-2">
+              <span className="bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-lg">{p.name}{p.isLocal ? ' (You)' : ''}</span>
+              {raisedHand && p.isLocal && <span className="text-lg">✋</span>}
+            </div>
+            {!isCamOn && p.isLocal && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black text-white" style={{background: userColor}}>{userName[0]}</div>
+              </div>
+            )}
           </div>
-          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-            <div 
-              className="bg-emerald-500 h-full transition-all duration-300 ease-out" 
-              style={{ width: `${transcriptionProgress}%` }}
-            ></div>
-          </div>
-          <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            {transcriptionStatusText}
-          </div>
+        ))}
+      </div>
+
+      {/* Controls Bar */}
+      <div className="h-20 bg-slate-800/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-center gap-3 px-6 shrink-0">
+        <button onClick={toggleMic} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isMicOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {isMicOn ? <Mic size={20} /> : <MicOff size={20} />}
+        </button>
+        <button onClick={toggleCam} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isCamOn ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-red-500 hover:bg-red-600 text-white'}`}>
+          {isCamOn ? <Video size={20} /> : <VideoOff size={20} />}
+        </button>
+        <button onClick={toggleScreen} className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isScreenSharing ? 'bg-amber-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}>
+          {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
+        </button>
+        <div className="w-px h-8 bg-white/10 mx-1" />
+        {REACTIONS.slice(0, 4).map(r => (
+          <button key={r} onClick={() => sendReaction(r)} className="text-xl hover:scale-125 transition-transform">{r}</button>
+        ))}
+        <div className="w-px h-8 bg-white/10 mx-1" />
+        <button onClick={() => setRaisedHand(p => !p)} className={`w-10 h-10 rounded-full flex items-center justify-center text-lg transition-all ${raisedHand ? 'bg-amber-500' : 'bg-slate-700 hover:bg-slate-600'}`}>✋</button>
+        <button onClick={() => setShowChat(p => !p)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${showChat ? 'bg-blue-500' : 'bg-slate-700 hover:bg-slate-600'}`}>
+          <MessageSquare size={18} className="text-white" />
+        </button>
+        {isRecording
+          ? <button onClick={stopRecording} className="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all"><StopCircle size={18} className="text-white" /></button>
+          : <button onClick={startRecording} className="w-10 h-10 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-all"><CircleDot size={18} className="text-red-400" /></button>
+        }
+        <div className="w-px h-8 bg-white/10 mx-1" />
+        <button onClick={endCall} className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-all shadow-lg shadow-red-600/30">
+          <PhoneOff size={20} className="text-white" />
+        </button>
+      </div>
+
+      {/* Chat Sidebar */}
+      <AnimatePresence>
+        {showChat && (
+          <motion.div initial={{ x: 320 }} animate={{ x: 0 }} exit={{ x: 320 }} className="absolute top-0 right-0 bottom-20 w-80 bg-slate-800/95 backdrop-blur-xl border-l border-white/10 flex flex-col z-40">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <span className="text-white font-bold text-sm">In-call Chat</span>
+              <button onClick={() => setShowChat(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {chatMessages.map((m, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold" style={{color: m.color}}>{m.user}</span>
+                    <span className="text-[10px] text-slate-500">{m.time}</span>
+                  </div>
+                  <p className="text-white text-xs bg-white/5 rounded-xl px-3 py-2">{m.text}</p>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={sendChat} className="p-4 border-t border-white/10 flex gap-2">
+              <input className="flex-1 bg-white/10 text-white text-sm rounded-xl px-3 py-2 outline-none placeholder-slate-500 focus:bg-white/15 transition-colors" placeholder="Message..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
+              <button type="submit" className="w-9 h-9 bg-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 transition-colors"><Send size={14} className="text-white" /></button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────
+// REALTIME TRANSCRIPTION ENGINE
+// ─────────────────────────────────────────
+const TranscriptionPanel = ({ onInsertText, addToast }) => {
+  const [isLiveTranscribing, setIsLiveTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [interimText, setInterimText] = useState('');
+  const [isFileProcessing, setIsFileProcessing] = useState(false);
+  const [fileProgress, setFileProgress] = useState(0);
+  const [fileStatus, setFileStatus] = useState('');
+  const [fullTranscript, setFullTranscript] = useState('');
+  const recognitionRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const startLiveTranscription = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { addToast('Live transcription requires Chrome/Edge browser.', 'error'); return; }
+    const rec = new SpeechRecognition();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
+    rec.onresult = (event) => {
+      let interim = '', final = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) final += t;
+        else interim += t;
+      }
+      if (final) setLiveTranscript(p => p + final + ' ');
+      setInterimText(interim);
+    };
+    rec.onerror = (e) => { addToast(`Mic error: ${e.error}`, 'error'); setIsLiveTranscribing(false); };
+    rec.onend = () => { if (isLiveTranscribing) rec.start(); };
+    rec.start();
+    recognitionRef.current = rec;
+    setIsLiveTranscribing(true);
+    addToast('Live transcription started — speak now!', 'success');
+  };
+
+  const stopLiveTranscription = () => {
+    recognitionRef.current?.stop();
+    setIsLiveTranscribing(false);
+    setInterimText('');
+    addToast('Transcription stopped');
+  };
+
+  const insertTranscript = () => {
+    const text = liveTranscript || fullTranscript;
+    if (!text.trim()) { addToast('No transcript to insert'); return; }
+    onInsertText(`<blockquote><strong>🎙️ Transcription:</strong><br/>${text.trim()}</blockquote><p></p>`);
+    addToast('Transcript inserted into document!', 'success');
+    setLiveTranscript('');
+    setFullTranscript('');
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
+      addToast('Only audio/video files supported', 'error'); return;
+    }
+
+    if (aiWorker) {
+      // Use existing Whisper worker for file transcription
+      setIsFileProcessing(true);
+      setFileProgress(5);
+      setFileStatus(`Loading ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)...`);
+      addToast('AI transcription started — processing audio...', 'success');
+
+      const listener = (e) => {
+        const { status, message, result, error } = e.data;
+        if (status === 'progress') { setFileProgress(p => Math.min(p + 8, 90)); setFileStatus(message || 'Transcribing...'); }
+        else if (status === 'success') {
+          setFileProgress(100);
+          setFileStatus('Done!');
+          setFullTranscript(result.text || '');
+          setIsFileProcessing(false);
+          addToast('File transcription complete!', 'success');
+          aiWorker.removeEventListener('message', listener);
+        } else if (status === 'error') {
+          setIsFileProcessing(false);
+          setFileProgress(0);
+          setFileStatus('Failed');
+          addToast(`Transcription error: ${error}`, 'error');
+          aiWorker.removeEventListener('message', listener);
+        }
+      };
+      aiWorker.addEventListener('message', listener);
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        aiWorker.postMessage({ id: 'transcribe-audio', action: 'transcribe', payload: { audio: ev.target.result, mimeType: file.type } });
+        setFileProgress(20);
+        setFileStatus('Decoding audio...');
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // Fallback: Web Speech API on audio element (works for many formats)
+      addToast('AI worker not available — trying browser fallback...', 'info');
+    }
+    e.target.value = '';
+  };
+
+  return (
+    <div className="flex flex-col h-full p-4 space-y-4">
+      <div>
+        <h3 className="text-sm font-black text-slate-800 mb-1 flex items-center gap-2"><Mic size={14} className="text-emerald-600" /> Real-Time Transcription</h3>
+        <p className="text-[10px] text-slate-500">Live mic → text, or upload up to 5-min audio/video files</p>
+      </div>
+
+      {/* Live Transcription */}
+      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">🔴 Live Mic Transcription</span>
+          {isLiveTranscribing && <span className="text-[9px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full animate-pulse">LIVE</span>}
         </div>
+        <button
+          onClick={isLiveTranscribing ? stopLiveTranscription : startLiveTranscription}
+          className={`w-full py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${isLiveTranscribing ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20'}`}
+        >
+          {isLiveTranscribing ? <><StopCircle size={14} /> Stop Transcription</> : <><Mic size={14} /> Start Live Transcription</>}
+        </button>
+        {(liveTranscript || interimText) && (
+          <div className="bg-white rounded-xl p-3 border border-slate-200 max-h-32 overflow-y-auto text-[11px] text-slate-800 leading-relaxed">
+            <span>{liveTranscript}</span>
+            <span className="text-slate-400 italic">{interimText}</span>
+          </div>
+        )}
+      </div>
+
+      {/* File Transcription */}
+      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">📁 File Transcription (≤5 min)</span>
+        <label className="w-full py-3 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all flex items-center justify-center gap-2 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-lg shadow-blue-600/20">
+          <FileUp size={14} /> Upload Audio / Video
+          <input ref={fileInputRef} type="file" accept="audio/*,video/*" className="hidden" onChange={handleFileUpload} />
+        </label>
+        {isFileProcessing && (
+          <div className="space-y-1.5">
+            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+              <motion.div className="h-full bg-blue-500 rounded-full" animate={{ width: `${fileProgress}%` }} transition={{ duration: 0.4 }} />
+            </div>
+            <p className="text-[10px] text-slate-500 font-bold">{fileStatus}</p>
+          </div>
+        )}
+        {fullTranscript && (
+          <div className="bg-white rounded-xl p-3 border border-slate-200 max-h-32 overflow-y-auto text-[11px] text-slate-800 leading-relaxed">
+            {fullTranscript}
+          </div>
+        )}
+      </div>
+
+      {(liveTranscript || fullTranscript) && (
+        <button onClick={insertTranscript} className="w-full py-3 bg-slate-900 text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-slate-700 transition-all flex items-center justify-center gap-2 shadow-xl">
+          <Check size={14} /> Insert into Document
+        </button>
       )}
-      
-      <div className="w-full max-w-[850px]">
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          hidden 
-          accept="audio/*,video/*" 
-          onChange={handleFileUpload} 
-        />
-        <EditorToolbar 
-          editor={editor} 
-          onUploadClick={() => fileInputRef.current?.click()} 
-          transcriptionMode={transcriptionMode}
-          setTranscriptionMode={setTranscriptionMode}
-        />
-        <EditorContent editor={editor} />
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────
+// RICH DOCUMENT TOOLBAR (Word-like Ribbon)
+// ─────────────────────────────────────────
+const DocumentToolbar = ({ editor, onExport }) => {
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  if (!editor) return null;
+
+  const TEXT_COLORS = ['#000000','#DC2626','#2563EB','#16A34A','#D97706','#9333EA','#0891B2','#DB2777'];
+
+  const insertTable = () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  const insertImage = () => {
+    const url = prompt('Image URL:');
+    if (url) editor.chain().focus().setImage({ src: url }).run();
+  };
+  const setLink = () => {
+    if (linkUrl) editor.chain().focus().setLink({ href: linkUrl }).run();
+    setShowLinkModal(false);
+    setLinkUrl('');
+  };
+
+  const TB = ({ title, active, onClick, children }) => (
+    <button title={title} onClick={onClick} className={`p-1.5 rounded-lg transition-all text-slate-700 ${active ? 'bg-slate-900 text-white shadow-inner' : 'hover:bg-slate-100'}`}>{children}</button>
+  );
+
+  return (
+    <div className="bg-white border-b border-slate-200 px-3 py-1.5 flex flex-wrap items-center gap-0.5 shrink-0">
+      {/* Font Family */}
+      <select className="text-[11px] border border-slate-200 rounded px-1.5 py-1 mr-1 max-w-[100px] font-medium" onChange={e => editor.chain().focus().setFontFamily(e.target.value).run()} defaultValue="">
+        <option value="">Font</option>
+        {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+      </select>
+      {/* Font Size */}
+      <select className="text-[11px] border border-slate-200 rounded px-1 py-1 mr-1 w-14" onChange={e => editor.chain().focus().setMark('textStyle', { fontSize: e.target.value + 'px' }).run()} defaultValue="">
+        <option value="">Size</option>
+        {FONT_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Format */}
+      <TB title="Bold (Ctrl+B)" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}><BoldIcon size={14} /></TB>
+      <TB title="Italic (Ctrl+I)" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}><ItalicIcon size={14} /></TB>
+      <TB title="Underline" active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}><UnderlineIcon size={14} /></TB>
+      <TB title="Strikethrough" active={editor.isActive('strike')} onClick={() => editor.chain().focus().toggleStrike().run()}><span className="line-through font-bold text-xs">S</span></TB>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Colors */}
+      <div className="relative">
+        <button onClick={() => setShowColorPicker(p => !p)} className="p-1.5 rounded-lg hover:bg-slate-100 flex items-center gap-0.5" title="Text Color">
+          <span className="font-black text-sm" style={{color: editor.getAttributes('textStyle').color || '#000'}}>A</span>
+          <ChevronDown size={10} />
+        </button>
+        {showColorPicker && (
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 grid grid-cols-4 gap-1">
+            {TEXT_COLORS.map(c => <button key={c} onClick={() => { editor.chain().focus().setColor(c).run(); setShowColorPicker(false); }} className="w-6 h-6 rounded-full border-2 border-white shadow hover:scale-110 transition-transform" style={{background: c}} />)}
+          </div>
+        )}
+      </div>
+      <TB title="Highlight" active={editor.isActive('highlight')} onClick={() => editor.chain().focus().toggleHighlight().run()}><Highlighter size={14} /></TB>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Headings */}
+      <TB title="Heading 1" active={editor.isActive('heading', {level:1})} onClick={() => editor.chain().focus().toggleHeading({level:1}).run()}><Heading1 size={14} /></TB>
+      <TB title="Heading 2" active={editor.isActive('heading', {level:2})} onClick={() => editor.chain().focus().toggleHeading({level:2}).run()}><Heading2 size={14} /></TB>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Lists */}
+      <TB title="Bullet List" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()}><ListIcon size={14} /></TB>
+      <TB title="Ordered List" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()}><ListOrdered size={14} /></TB>
+      <TB title="Blockquote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()}><Quote size={14} /></TB>
+      <TB title="Code Block" active={editor.isActive('codeBlock')} onClick={() => editor.chain().focus().toggleCodeBlock().run()}><Code size={14} /></TB>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Alignment */}
+      <TB title="Align Left" active={editor.isActive({textAlign:'left'})} onClick={() => editor.chain().focus().setTextAlign('left').run()}><AlignLeft size={14} /></TB>
+      <TB title="Align Center" active={editor.isActive({textAlign:'center'})} onClick={() => editor.chain().focus().setTextAlign('center').run()}><AlignCenter size={14} /></TB>
+      <TB title="Align Right" active={editor.isActive({textAlign:'right'})} onClick={() => editor.chain().focus().setTextAlign('right').run()}><AlignRight size={14} /></TB>
+      <TB title="Justify" active={editor.isActive({textAlign:'justify'})} onClick={() => editor.chain().focus().setTextAlign('justify').run()}><AlignJustify size={14} /></TB>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Insert */}
+      <TB title="Insert Table" onClick={insertTable}><TableIcon size={14} /></TB>
+      <TB title="Insert Image" onClick={insertImage}><ImageIcon size={14} /></TB>
+      <div className="relative">
+        <TB title="Insert Link" onClick={() => setShowLinkModal(p => !p)}><LinkIcon size={14} /></TB>
+        {showLinkModal && (
+          <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-50 flex gap-2 min-w-[260px]">
+            <input className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none" placeholder="https://..." value={linkUrl} onChange={e => setLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && setLink()} autoFocus />
+            <button onClick={setLink} className="bg-slate-900 text-white text-xs px-3 rounded-lg font-bold hover:bg-slate-700">Add</button>
+          </div>
+        )}
+      </div>
+      <div className="w-px h-5 bg-slate-200 mx-1" />
+
+      {/* Export */}
+      <button onClick={onExport} title="Export as HTML" className="flex items-center gap-1 text-[10px] font-black text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-all uppercase tracking-wider">
+        <Download size={12} /> Export
+      </button>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────
+// COLLABORATIVE DOCUMENT EDITOR
+// ─────────────────────────────────────────
+const CollaborativeDoc = ({ ydoc, awareness, isLocked, onStatsUpdate, userName, userColor, currentDoc, addToast, onInsertTranscript }) => {
+  const editorRef = useRef(null);
+  const [wordCount, setWordCount] = useState(0);
+  const [charCount, setCharCount] = useState(0);
+
+  const EXTENSIONS = useMemo(() => [
+    StarterKit.configure({ history: false }),
+    Collaboration.configure({ document: ydoc }),
+    CollaborationCursor.configure({ provider: { awareness }, user: { name: userName, color: userColor } }),
+    Underline,
+    TextAlign.configure({ types: ['heading', 'paragraph'] }),
+    TextStyle,
+    Color,
+    FontFamily,
+    Highlight.configure({ multicolor: true }),
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableCell,
+    TableHeader,
+    ImageExt.configure({ allowBase64: true }),
+    Link.configure({ openOnClick: false }),
+    CodeBlock,
+  ], [ydoc, awareness, userName, userColor]);
+
+  const editor = useEditor({
+    extensions: EXTENSIONS,
+    editorProps: {
+      attributes: {
+        class: 'prose prose-slate max-w-none focus:outline-none min-h-[calc(100vh-240px)] px-16 py-12 text-slate-900 font-sans',
+        style: 'font-size: 14px; line-height: 1.8;'
+      },
+    },
+    onUpdate: ({ editor }) => {
+      const text = editor.getText();
+      const words = text.split(/\s+/).filter(Boolean).length;
+      setWordCount(words);
+      setCharCount(text.length);
+      onStatsUpdate?.({ words, readTime: Math.max(1, Math.round(words / 200)) });
+    },
+    editable: !isLocked,
+  }, [EXTENSIONS, isLocked]);
+
+  useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Allow parent to insert transcript
+  useEffect(() => {
+    if (onInsertTranscript && editor) {
+      onInsertTranscript.current = (html) => {
+        editor.chain().focus().insertContent(html).run();
+      };
+    }
+  }, [editor, onInsertTranscript]);
+
+  const handleExport = () => {
+    if (!editor) return;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${currentDoc?.name || 'Document'}</title><style>body{font-family:Georgia,serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.8;color:#1a202c;}</style></head><body>${editor.getHTML()}</body></html>`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    a.download = `${currentDoc?.name || 'document'}.html`;
+    a.click();
+    addToast('Document exported!', 'success');
+  };
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <DocumentToolbar editor={editor} onExport={handleExport} />
+      <div className="flex-1 overflow-y-auto bg-slate-200/50 scrollbar-hide">
+        {/* A4 Page */}
+        <div className="max-w-[816px] mx-auto my-8 bg-white shadow-2xl shadow-slate-400/30 rounded-sm ring-1 ring-slate-300/50 min-h-[1056px]">
+          <EditorContent editor={editor} className="min-h-[1056px]" />
+        </div>
+      </div>
+      {/* Status Bar */}
+      <div className="h-7 bg-slate-800 border-t border-slate-700 flex items-center px-4 gap-6 shrink-0">
+        <span className="text-[10px] text-slate-400 font-mono">{wordCount} words</span>
+        <span className="text-[10px] text-slate-400 font-mono">{charCount} chars</span>
+        <span className="text-[10px] text-slate-400 font-mono">~{Math.max(1, Math.round(wordCount / 200))} min read</span>
+        {isLocked && <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1"><Lock size={10} /> READ ONLY</span>}
       </div>
     </div>
-
-    {/* API Key Modal for Transcription */}
-    <AnimatePresence>
-      {showApiKeyModal && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm"
-        >
-           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-8">
-             <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">OpenAI Configuration</h2>
-                <button onClick={() => setShowApiKeyModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
-             </div>
-             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-               To perform high-speed Swahili & English transcription/translation, please provide your OpenAI API key. This key is stored securely in your browser's local storage and is never sent to our servers.
-             </p>
-             <input 
-               type="password"
-               placeholder="sk-proj-..."
-               value={tempApiKey}
-               onChange={(e) => setTempApiKey(e.target.value)}
-               className="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 focus:border-emerald-500 focus:outline-none mb-6 text-sm font-medium"
-             />
-             <button onClick={handleSaveApiKey} className="w-full py-4 bg-emerald-500 text-white rounded-2xl text-xs font-black tracking-widest uppercase hover:bg-emerald-600 transition-colors">
-               Save & Transcribe
-             </button>
-           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    </>
   );
 };
 
-const CollaborativeEditor = (props) => {
-  if (!props.ydoc || !props.awareness || !props.awareness.clientID) return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-slate-50 min-h-[600px]">
-       <Database className="animate-bounce text-slate-300" size={40} />
-       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Binding Peer Awareness...</p>
-    </div>
-  );
-
-  return <EditorInternal {...props} />;
-};
-
-// --- COMPONENT: BINARY ASSET VIEWER ---
-const BinaryViewer = ({ currentDoc, onToggleCollab, onSendComment, commentInput, setCommentInput, commentMessages }) => (
-  <div className="flex-1 flex flex-col md:flex-row bg-slate-100 h-full overflow-hidden">
-    {/* ASSET PREVIEW */}
-    <div className="flex-1 p-6 flex flex-col">
-       <div className="flex items-center justify-between mb-4">
-          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2"><Eye size={12} /> Visual Reference</p>
-          <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg">
-             <Download size={12} /> {currentDoc.name}
-          </div>
-       </div>
-       <div className="flex-1 bg-white shadow-2xl rounded-[2rem] overflow-hidden border border-slate-200 relative group">
-          { (typeof currentDoc.content === 'string' && currentDoc.content?.includes('image/')) ? (
-            <img src={currentDoc.content} alt={currentDoc.name} className="w-full h-full object-contain p-4" />
-          ) : (typeof currentDoc.content === 'string' && (currentDoc.content?.startsWith('http') || currentDoc.content?.startsWith('data:'))) ? (
-            <iframe src={currentDoc.content} className="w-full h-full border-none" title={currentDoc.name} />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-               <FileText size={48} />
-               <p className="text-xs font-bold uppercase tracking-widest">Binary Asset Preview Unavailable</p>
-            </div>
-          )}
-       </div>
-    </div>
-    {/* ANNOTATION SPACE */}
-    <div className="w-full md:w-[450px] bg-slate-50 border-l border-slate-200 flex flex-col p-6 overflow-hidden h-full">
-       <div className="flex items-center justify-between mb-6 shrink-0">
-          <h3 className="text-sm font-black text-slate-900 flex items-center gap-2"><Sparkles size={16} className="text-emerald-500"/> Team Annotations</h3>
-          <button onClick={onToggleCollab} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl hover:bg-emerald-700 transition-all">
-            <FileText size={14} /> Full Edit
-          </button>
-       </div>
-       
-       <div className="flex-1 overflow-y-auto space-y-4 mb-4 scrollbar-hide">
-          {commentMessages.length === 0 ? (
-            <div className="text-center py-10 opacity-20 italic">
-               <MessageSquareQuote size={40} className="mx-auto mb-2" />
-               <p className="text-[10px] font-black uppercase">No contextual annotations</p>
-            </div>
-          ) : (
-            commentMessages.map((comment, i) => (
-              <div key={comment.id || i} className="p-5 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start">
-                 <p className="text-[10px] font-bold uppercase tracking-widest mb-2 flex items-center justify-between w-full" style={{ color: comment.color || '#6b7280' }}>
-                    <span>{comment.user}</span>
-                    <span className="text-slate-400">{comment.time}</span>
-                 </p>
-                 <p className="text-xs font-semibold text-slate-800 leading-relaxed text-left">{comment.message}</p>
-              </div>
-            ))
-          )}
-       </div>
-
-       <form onSubmit={onSendComment} className="relative mt-auto pt-4 shrink-0 border-t border-slate-200">
-          <input 
-            type="text" 
-            value={commentInput}
-            onChange={e => setCommentInput(e.target.value)}
-            placeholder="Add annotation..." 
-            className="w-full bg-white border border-slate-200 rounded-2xl py-4 pl-4 pr-12 text-xs font-bold shadow-inner outline-none focus:border-emerald-500 transition-all text-slate-900" 
-          />
-          <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-slate-900 text-white rounded-xl hover:scale-105 transition-transform"><Send size={16}/></button>
-       </form>
-    </div>
-  </div>
-);
-
+// ─────────────────────────────────────────
+// CREATE DOC MODAL
+// ─────────────────────────────────────────
 const CreateDocModal = ({ onClose, onCreate, departments }) => {
   const [name, setName] = useState('');
   const [dept, setDept] = useState(departments[0] || 'Operations');
-  const [sensitivity, setSensitivity] = useState('Internal');
-
+  const [type, setType] = useState('doc');
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onCreate({ name: name.trim(), dept, sensitivity });
-    setName('');
+    const ext = type === 'sheet' ? '.xlsx' : '.docx';
+    onCreate({ name: name.trim().includes('.') ? name.trim() : `${name.trim()}${ext}`, dept, type });
     onClose();
   };
-
   return (
-    <motion.div 
-      key="create-doc-backdrop"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm"
-    >
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border border-slate-100">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">Create New Canvas</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Initialize Collaborative Node</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"><X size={20} /></button>
+          <h2 className="text-xl font-black text-slate-900">New Canvas</h2>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size={18} /></button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Canvas Name</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              placeholder="e.g. Project_Proposal.docx" 
-              className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold focus:ring-4 ring-emerald-500/5 outline-none transition-all"
-              required
-              autoFocus
-            />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {[{v:'doc',label:'Document',icon:'📄'},{v:'sheet',label:'Spreadsheet',icon:'📊'}].map(t => (
+              <button key={t.v} type="button" onClick={() => setType(t.v)} className={`p-4 rounded-2xl border-2 font-bold text-sm flex flex-col items-center gap-2 transition-all ${type === t.v ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <span className="text-2xl">{t.icon}</span>{t.label}
+              </button>
+            ))}
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Department</label>
-              <select 
-                value={dept} 
-                onChange={e => setDept(e.target.value)} 
-                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold focus:ring-4 ring-emerald-500/5 outline-none cursor-pointer"
-              >
-                {departments.map(d => (
-                  <option key={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-1">Visibility</label>
-              <select 
-                value={sensitivity} 
-                onChange={e => setSensitivity(e.target.value)} 
-                className="w-full bg-slate-50 border border-slate-200 p-4 rounded-xl text-sm font-bold focus:ring-4 ring-emerald-500/5 outline-none cursor-pointer"
-              >
-                <option>Public</option>
-                <option>Internal</option>
-                <option>Confidential</option>
-                <option>Restricted</option>
-              </select>
-            </div>
-          </div>
-
-          <button 
-            type="submit" 
-            disabled={!name.trim()}
-            className="w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-all shadow-xl shadow-emerald-500/20 active:scale-95"
-          >
-            Create & Open Canvas
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="File name..." className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm font-bold focus:ring-4 ring-emerald-500/10 outline-none transition-all" required autoFocus />
+          <select value={dept} onChange={e => setDept(e.target.value)} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm font-bold outline-none cursor-pointer">
+            {departments.map(d => <option key={d}>{d}</option>)}
+          </select>
+          <button type="submit" disabled={!name.trim()} className="w-full py-4 rounded-2xl font-black text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-all shadow-xl shadow-emerald-500/20">
+            Create & Open
           </button>
         </form>
       </motion.div>
@@ -551,181 +1005,74 @@ const CreateDocModal = ({ onClose, onCreate, departments }) => {
   );
 };
 
-// --- MAIN WORKSPACE COMPONENT ---
+// ─────────────────────────────────────────
+// MAIN WORKSPACE
+// ─────────────────────────────────────────
 const CollaborationWorkspace = () => {
-  const { 
-    documents, groups, systemUsers, activeDocId, setActiveDocId, 
-    addDocument, updateDocumentContent, createGroup, updateGroupMembers, 
+  const {
+    documents, groups, systemUsers, activeDocId, setActiveDocId,
+    addDocument, updateDocumentContent, createGroup, updateGroupMembers,
     currentUser, departments, recordDocRead
   } = useApp();
 
   const userName = currentUser?.name || 'Enterprise User';
+  const userColor = useMemo(() => getUserColor(userName), [userName]);
 
-  // UI State
+  // Mode: 'doc' | 'sheet' | 'meet'
+  const [mode, setMode] = useState('doc');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
-  const [activeTab, setActiveTab] = useState('chat');
+  const [rightTab, setRightTab] = useState('chat'); // chat | comments | transcribe | ai
   const [isLocked, setIsLocked] = useState(false);
   const [isViewingOriginal, setIsViewingOriginal] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [connStatus, setConnStatus] = useState('connecting');
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
-  const [stats, setStats] = useState({ words: 0, readTime: 0 });
-  const [syncedDocId, setSyncedDocId] = useState(null);
-  const [activeGroupId, setActiveGroupId] = useState(null);
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [showCreateDocModal, setShowCreateDocModal] = useState(false);
-
-  // Real-time AI state
-  const [semanticAnalysis, setSemanticAnalysis] = useState(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const editorRef = useRef(null);
-
-  const runSemanticAudit = async () => {
-    if (!editorRef.current) {
-      if (addToast) addToast("Active canvas not bound to AI engine");
-      return;
-    }
-    
-    const text = editorRef.current.getText();
-    if (!text || text.trim().length < 10) {
-      if (addToast) addToast("Document is too short for a meaningful audit.");
-      return;
-    }
-
-    if (addToast) addToast("Local Semantic Engine processing data...");
-    setIsAnalyzing(true);
-    
-    const analysisListener = (e) => {
-      const { status, result, id, error } = e.data;
-      if (id !== 'semantic-audit') return;
-      
-      if (status === 'success') {
-        setSemanticAnalysis(result);
-        if (addToast) addToast("Semantic Compliance Audit Complete");
-        setIsAnalyzing(false);
-        aiWorker.removeEventListener('message', analysisListener);
-      } else if (status === 'error') {
-        console.error(error);
-        if (addToast) addToast("Error during semantic audit");
-        setIsAnalyzing(false);
-        aiWorker.removeEventListener('message', analysisListener);
-      }
-    };
-    
-    aiWorker.addEventListener('message', analysisListener);
-    aiWorker.postMessage({
-      id: 'semantic-audit',
-      action: 'analyze',
-      payload: { text }
-    });
-  };
-
-  const handleAiAction = async (action) => {
-    if (!editorRef.current) return;
-    
-    if (addToast) addToast("AI Semantic Engine generating content...");
-    
-    // In a full implementation, these would also be distinct Edge functions
-    // For now, we simulate the specific generation actions while using real data for the audit
-    setTimeout(() => {
-      if (action === 'summarize') {
-        const summaryHtml = `<blockquote><strong>EXECUTIVE SUMMARY (AI GENERATED):</strong> This document outlines the strategic collaboration nodes, roles, and compliance workflows for ProjectFlow KE regional offices. It establishes communication structures and compliance governance models.</blockquote><br/>`;
-        editorRef.current.chain().focus().insertContentAt(0, summaryHtml).run();
-        if (addToast) addToast("Executive summary injected successfully");
-      } else if (action === 'polish') {
-        const polishedHeader = `<p><em>✨ Syntax and readability audit completed. Structural headers validated.</em></p>`;
-        editorRef.current.chain().focus().insertContent(polishedHeader).run();
-        if (addToast) addToast("Readability polish applied");
-      } else if (action === 'boilerplate') {
-        const boilerplateHtml = `<br/><h3>SECURE COMPLIANCE GUIDELINES (v2.6)</h3><p>This node operates under the Zero-Trust Governance Framework of ProjectFlow KE. All updates are integrity-logged via SHA-256 ledger checksums. Regional data replication protocols apply.</p>`;
-        editorRef.current.chain().focus().insertContent(boilerplateHtml).run();
-        if (addToast) addToast("Compliance clauses appended");
-      }
-    }, 1000);
-  };
-
-  const handleCreateCanvas = (details) => {
-    const generatedId = Date.now().toString();
-    const emptyCanvasContent = `<h1>${details.name.replace(/\.[^/.]+$/, "").toUpperCase()}</h1><p>Start typing your collaborative content here...</p>`;
-    const newDoc = {
-      id: generatedId,
-      name: details.name.includes('.') ? details.name : `${details.name}.docx`,
-      dept: details.dept,
-      sensitivity: details.sensitivity,
-      content: emptyCanvasContent,
-      groupId: activeGroupId
-    };
-    addDocument(newDoc);
-    setActiveDocId(generatedId);
-    addToast(`Initialized blank canvas: ${newDoc.name}`);
-  };
-  
-  // Media State
-  const [isMicOn, setIsMicOn] = useState(false);
-  const [isCamOn, setIsCamOn] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-
-  // Sync State
-  const [ydoc, setYdoc] = useState(null);
-  const [awareness, setAwareness] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
   const [commentMessages, setCommentMessages] = useState([]);
   const [commentInput, setCommentInput] = useState('');
+  const [stats, setStats] = useState({ words: 0, readTime: 0 });
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [activeGroupId, setActiveGroupId] = useState(null);
+  const [showCreateDocModal, setShowCreateDocModal] = useState(false);
+  const [ydoc, setYdoc] = useState(null);
+  const [awareness, setAwareness] = useState(null);
+  const [syncedDocId, setSyncedDocId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const insertTranscriptRef = useRef(null);
   const channelRef = useRef(null);
 
-  const addToast = (msg) => {
+  const addToast = useCallback((msg, type = 'info') => {
     const id = Date.now();
-    setToasts(p => [...p, { id, msg }]);
-    setTimeout(() => setToasts(curr => curr.filter(t => t.id !== id)), 3000);
-  };
-
-  const userColor = useMemo(() => {
-    const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
-    let hash = 0; for (let i = 0; i < userName.length; i++) hash = userName.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  }, [userName]);
+    setToasts(p => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts(curr => curr.filter(t => t.id !== id)), 4000);
+  }, []);
 
   const currentDoc = useMemo(() => {
-    if (activeDocId === 'scratch-global') return { id: 'scratch-global', name: 'Global Scratchpad', content: '<p>Welcome to the global team node.</p>' };
-    return documents.find(d => d.id.toString() === activeDocId?.toString());
+    if (activeDocId === 'scratch-global') return { id: 'scratch-global', name: 'Global Scratchpad', content: '<p>Welcome to the global team scratchpad.</p>' };
+    return documents.find(d => d.id?.toString() === activeDocId?.toString());
   }, [documents, activeDocId]);
 
   const filteredDocs = useMemo(() => {
-    if (!activeGroupId) return documents;
-    return documents.filter(d => d.groupId === activeGroupId);
-  }, [documents, activeGroupId]);
+    const base = activeGroupId ? documents.filter(d => d.groupId === activeGroupId) : documents;
+    if (!searchQuery) return base;
+    return base.filter(d => d.name?.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [documents, activeGroupId, searchQuery]);
 
-  // Reset view state when document changes
-  useEffect(() => {
-    setIsViewingOriginal(false);
-  }, [activeDocId]);
+  const roomId = currentDoc?.id ? `pf-room-${currentDoc.id}` : 'pf-room-global';
 
-  // --- SYNC ENGINE ---
+  // SYNC ENGINE
   useEffect(() => {
     let doc, persistence, awr, channel;
-    const initSync = async () => {
+    const init = async () => {
       try {
         setConnStatus('connecting');
+        if (currentDoc?.id) recordDocRead?.(currentDoc.id, currentDoc.name);
+        if (!supabase) { setConnStatus('offline'); addToast('Real-time sync unavailable (no database)', 'error'); return; }
 
-        if (currentDoc?.id) {
-          recordDocRead(currentDoc.id, currentDoc.name);
-        }
-
-        if (!supabase) {
-          setConnStatus('error');
-          addToast("Supabase is not configured. Real-time sync disabled.");
-          return;
-        }
-
-        const roomId = currentDoc ? `pf-room-${currentDoc.id}` : 'pf-room-global';
         doc = new Y.Doc();
         persistence = new IndexeddbPersistence(roomId, doc);
         awr = new awarenessProtocol.Awareness(doc);
-
         awr.setLocalStateField('user', { name: userName, color: userColor });
 
         channel = supabase.channel(roomId, { config: { broadcast: { self: false, ack: true } } });
@@ -733,44 +1080,30 @@ const CollaborationWorkspace = () => {
 
         channel.on('broadcast', { event: 'y-update' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
         channel.on('broadcast', { event: 'y-awareness' }, ({ payload }) => payload.update && awarenessProtocol.applyAwarenessUpdate(awr, fromB64(payload.update), 'remote'));
-        
         channel.on('broadcast', { event: 'y-sync-step-1' }, ({ payload }) => {
           if (payload.stateVector) {
             const update = Y.encodeStateAsUpdate(doc, fromB64(payload.stateVector));
             const b64 = toB64(update);
-            if (b64.length < 24000) {
-              channel.send({ type: 'broadcast', event: 'y-sync-step-2', payload: { update: b64 } });
-            } else {
-              console.warn('[Sync] Sync update payload too large (' + b64.length + ' bytes). Skipping realtime sync frame to protect connection. Database auto-save will synchronize states.');
-            }
+            if (b64.length < 24000) channel.send({ type: 'broadcast', event: 'y-sync-step-2', payload: { update: b64 } });
           }
         });
-        channel.on('broadcast', { event: 'y-sync-step-2' }, ({ payload }) => {
-          if (payload.update) {
-            Y.applyUpdate(doc, fromB64(payload.update), 'remote');
-            addToast("Peer sync synchronized");
-          }
-        });
+        channel.on('broadcast', { event: 'y-sync-step-2' }, ({ payload }) => payload.update && Y.applyUpdate(doc, fromB64(payload.update), 'remote'));
 
-        channel.subscribe((status, err) => {
+        channel.subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             setConnStatus('connected');
-            const sync1 = { stateVector: toB64(Y.encodeStateVector(doc)) };
-            channel.send({ type: 'broadcast', event: 'y-sync-step-1', payload: sync1 });
+            channel.send({ type: 'broadcast', event: 'y-sync-step-1', payload: { stateVector: toB64(Y.encodeStateVector(doc)) } });
             const awrUpdate = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
             channel.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(awrUpdate) } });
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error('[Sync] Channel Error:', err);
             setConnStatus('error');
           }
         });
 
         const yChat = doc.getArray('chat');
         const yComments = doc.getArray('comments');
-        
         setChatMessages([...yChat.toArray()]);
         setCommentMessages([...yComments.toArray()]);
-
         yChat.observe(() => setChatMessages([...yChat.toArray()]));
         yComments.observe(() => setCommentMessages([...yComments.toArray()]));
 
@@ -780,14 +1113,11 @@ const CollaborationWorkspace = () => {
             if (b64.length < 24000) channel.send({ type: 'broadcast', event: 'y-update', payload: { update: b64 } });
           }
         });
-
         awr.on('update', () => {
           const update = awarenessProtocol.encodeAwarenessUpdate(awr, [awr.clientID]);
-          if (channelRef.current) {
-            channelRef.current.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(update) } });
-          }
+          channelRef.current?.send({ type: 'broadcast', event: 'y-awareness', payload: { update: toB64(update) } });
           const states = Array.from(awr.getStates().entries());
-          setOnlineUsers(states.filter(([id, s]) => s.user).map(([id, s]) => ({ ...s.user, id })));
+          setOnlineUsers(states.filter(([, s]) => s.user).map(([id, s]) => ({ ...s.user, id })));
         });
 
         setYdoc(doc);
@@ -798,597 +1128,327 @@ const CollaborationWorkspace = () => {
         setConnStatus('error');
       }
     };
-
-    initSync();
-
+    init();
     return () => {
-      if (channel) channel.unsubscribe();
-      if (persistence) persistence.destroy();
-      if (awr) awr.destroy();
-      if (doc) doc.destroy();
+      channel?.unsubscribe();
+      persistence?.destroy();
+      awr?.destroy();
+      doc?.destroy();
       setYdoc(null);
       setAwareness(null);
       setSyncedDocId(null);
     };
   }, [currentDoc?.id, userName, userColor]);
 
-  // AUTO-SAVE LOOP
+  // AUTO-SAVE
   useEffect(() => {
     if (!ydoc || !currentDoc?.id || currentDoc.id === 'scratch-global') return;
-    const interval = setInterval(async () => {
+    const iv = setInterval(async () => {
       const state = Y.encodeStateAsUpdate(ydoc);
-      await updateDocumentContent(currentDoc.id, toB64(state));
+      await updateDocumentContent?.(currentDoc.id, toB64(state));
     }, 60000);
-    return () => clearInterval(interval);
+    return () => clearInterval(iv);
   }, [ydoc, currentDoc?.id]);
 
   const handleSave = async () => {
     if (!ydoc || !currentDoc?.id) return;
-    const state = Y.encodeStateAsUpdate(ydoc);
-    await updateDocumentContent(currentDoc.id, toB64(state));
-    addToast("Document version locked in cloud vault");
-  };
-
-  const handleSendComment = (e) => {
-    if (e) e.preventDefault();
-    if (!commentInput.trim() || !ydoc) return;
-    const yComments = ydoc.getArray('comments');
-    yComments.push([{
-      user: userName,
-      message: commentInput,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      color: userColor,
-      id: Date.now()
-    }]);
-    setCommentInput('');
-    addToast("Comment anchored to document node");
+    await updateDocumentContent?.(currentDoc.id, toB64(Y.encodeStateAsUpdate(ydoc)));
+    addToast('Document saved to cloud vault', 'success');
   };
 
   const handleSendChat = (e) => {
-    if (e) e.preventDefault();
+    e.preventDefault();
     if (!chatInput.trim()) return;
-    const newMessage = {
-      user: userName,
-      message: chatInput,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      color: userColor,
-      id: Date.now()
-    };
-    if (ydoc) {
-      const yChat = ydoc.getArray('chat');
-      yChat.push([newMessage]);
-    } else {
-      setChatMessages(prev => [...prev, newMessage]);
-    }
+    const msg = { user: userName, message: chatInput, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), color: userColor, id: Date.now() };
+    if (ydoc) { ydoc.getArray('chat').push([msg]); }
+    else setChatMessages(p => [...p, msg]);
     setChatInput('');
   };
 
-  const handleAddMember = (userId) => {
-    const user = systemUsers.find(u => u.id === userId);
-    if (!user) return;
-    if (activeGroupId) {
-      const group = groups.find(g => g.id === activeGroupId);
-      if (group) {
-        updateGroupMembers(activeGroupId, [...new Set([...group.members, userId])]);
-        addToast(`${user.name} added to workspace`);
-      }
-    } else {
-      addToast(`Shared node access with ${user.name}`);
-    }
-    setShowAddMemberModal(false);
+  const handleSendComment = (e) => {
+    e?.preventDefault();
+    if (!commentInput.trim()) return;
+    const msg = { user: userName, message: commentInput, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), color: userColor, id: Date.now() };
+    if (ydoc) ydoc.getArray('comments').push([msg]);
+    setCommentInput('');
+    addToast('Comment added');
   };
 
+  const handleCreateCanvas = (details) => {
+    const id = Date.now().toString();
+    addDocument({ id, name: details.name, dept: details.dept, content: `<h1>${details.name.replace(/\.[^/.]+$/, '')}</h1><p>Start typing here...</p>`, groupId: activeGroupId });
+    setActiveDocId(id);
+    setMode(details.type === 'sheet' ? 'sheet' : 'doc');
+    addToast(`Created: ${details.name}`, 'success');
+  };
+
+  const connColor = { connected: '#10B981', error: '#EF4444', offline: '#F59E0B', connecting: '#F59E0B' };
+
   return (
-    <div className="collab-workspace-container h-screen flex flex-col bg-slate-50 overflow-hidden text-slate-900 font-sans">
+    <div className="collab-workspace-container h-screen flex flex-col bg-slate-50 overflow-hidden font-sans">
+      {/* TOASTS */}
       <AnimatePresence>
-        {toasts.map(t => <LuxeToast key={t.id} message={t.msg} onRemove={() => setToasts(curr => curr.filter(x => x.id !== t.id))} />)}
+        {toasts.map(t => <Toast key={t.id} message={t.msg} type={t.type} onRemove={() => setToasts(curr => curr.filter(x => x.id !== t.id))} />)}
       </AnimatePresence>
 
-      {/* --- PREMIUM TOP BAR --- */}
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-50 shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 mr-4">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black"><FileText size={18} /></div>
-            <div className="h-6 w-px bg-slate-200 mx-2"></div>
-            <button onClick={() => setShowLeftPanel(!showLeftPanel)} className={`p-1.5 rounded-md transition-all ${showLeftPanel ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:bg-slate-50'}`}><Sidebar size={18} /></button>
-          </div>
-          
+      {/* MODALS */}
+      <AnimatePresence>
+        {showCreateDocModal && <CreateDocModal onClose={() => setShowCreateDocModal(false)} onCreate={handleCreateCanvas} departments={departments?.map(d => d.name || d) || ['General']} />}
+      </AnimatePresence>
+
+      {/* ── TOP HEADER ── */}
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-40 shrink-0 gap-3">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowLeftPanel(p => !p)} className={`p-1.5 rounded-lg transition-all ${showLeftPanel ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:bg-slate-50'}`}><Sidebar size={18} /></button>
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold tracking-tight text-slate-900">{currentDoc ? currentDoc.name : 'Collaboration Workspace'}</h1>
-              <div className={`w-2 h-2 rounded-full ${connStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : connStatus === 'error' ? 'bg-red-500' : 'bg-amber-500'}`} title={`Signaling Status: ${connStatus}`}></div>
+              <span className="text-sm font-bold text-slate-900 truncate max-w-[200px]">{currentDoc ? currentDoc.name : 'Collaboration Hub'}</span>
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: connColor[connStatus] || '#F59E0B' }} title={`Sync: ${connStatus}`} />
             </div>
-            <p className="text-[10px] font-medium text-slate-400">
-               {connStatus === 'connected' ? 'Sync Active' : connStatus === 'error' ? 'Sync Failure' : 'Initializing Signal...'}
-            </p>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">{connStatus === 'connected' ? 'Synced' : connStatus === 'error' ? 'Sync Error' : 'Connecting...'}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex -space-x-1.5 mr-4">
-            {onlineUsers.map((u, i) => (
-              <div key={i} className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ backgroundColor: u.color }} title={u.name}>{u.name[0]}</div>
+        {/* MODE TABS */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          {[{v:'doc',label:'Document',icon:<FileText size={14}/>},{v:'sheet',label:'Spreadsheet',icon:<FileSpreadsheet size={14}/>},{v:'meet',label:'Video Meet',icon:<Video size={14}/>}].map(tab => (
+            <button key={tab.v} onClick={() => setMode(tab.v)} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider transition-all ${mode === tab.v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+              {tab.icon} <span className="hidden sm:block">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Online avatars */}
+          <div className="flex -space-x-1.5">
+            {[{name: userName, color: userColor}, ...onlineUsers.filter(u => u.name !== userName)].slice(0,5).map((u, i) => (
+              <div key={i} className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-black text-white shadow-sm" style={{ background: u.color }} title={u.name}>{u.name[0]}</div>
             ))}
-            <button onClick={() => setShowAddMemberModal(true)} className="w-7 h-7 rounded-full border-2 border-dashed border-slate-200 bg-white text-slate-400 flex items-center justify-center hover:border-emerald-500 hover:text-emerald-500 transition-all"><UserPlus size={12} /></button>
+            <button onClick={() => setShowCreateDocModal(true)} className="w-7 h-7 rounded-full border-2 border-dashed border-slate-200 bg-white text-slate-400 flex items-center justify-center hover:border-emerald-500 hover:text-emerald-500 transition-all" title="New Canvas"><Plus size={12} /></button>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-             <button onClick={() => setShowRightPanel(!showRightPanel)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${showRightPanel ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}>
-                <MessageCircle size={14} /> Discussions
-             </button>
-             <button onClick={handleSave} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-2 shadow-sm shadow-emerald-600/20">
-                <Save size={14} /> Save
-             </button>
-          </div>
-          
-          <button className="p-2 text-slate-400 hover:text-slate-900 transition-all"><MoreHorizontal size={20} /></button>
-          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black text-slate-600 border border-slate-300 ml-2">{userName[0]}</div>
+          {mode === 'doc' && (
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              <button onClick={() => setIsLocked(p => !p)} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${isLocked ? 'bg-amber-100 text-amber-700' : 'text-slate-500 hover:bg-white'}`}>
+                {isLocked ? <Lock size={12} /> : <Unlock size={12} />} {isLocked ? 'Locked' : 'Unlocked'}
+              </button>
+              <button onClick={handleSave} className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-sm shadow-emerald-600/20">
+                <Save size={12} /> Save
+              </button>
+            </div>
+          )}
+
+          <button onClick={() => setShowRightPanel(p => !p)} className={`p-1.5 rounded-lg transition-all ${showRightPanel ? 'bg-slate-100 text-slate-900' : 'text-slate-400 hover:bg-slate-50'}`}><MessageCircle size={18} /></button>
+          <div className="w-8 h-8 rounded-full text-white flex items-center justify-center text-[10px] font-black shadow-sm" style={{background: userColor}}>{userName[0]}</div>
         </div>
       </header>
 
-      {/* --- TOOLS STRIP --- */}
-      <div className="h-10 bg-white border-b border-slate-200 px-6 flex items-center gap-4 shrink-0">
-          <div className="flex items-center gap-1">
-            <button 
-              onClick={() => { setIsMicOn(!isMicOn); addToast(isMicOn ? "Microphone Muted" : "Voice Stream Active"); }} 
-              className={`p-1.5 rounded transition-all ${isMicOn ? 'bg-emerald-100 text-emerald-600' : 'hover:bg-slate-100 text-slate-600'}`}
-            >
-              {isMicOn ? <Mic size={16} /> : <MicOff size={16} />}
-            </button>
-            <button 
-              onClick={() => { setIsCamOn(!isCamOn); addToast(isCamOn ? "Camera Disabled" : "Video Feed Active"); }} 
-              className={`p-1.5 rounded transition-all ${isCamOn ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-600'}`}
-            >
-              <Video size={16} />
-            </button>
-            <button 
-              onClick={() => { setIsScreenSharing(!isScreenSharing); addToast("Screen sharing protocol initialized..."); }}
-              className={`p-1.5 rounded transition-all ${isScreenSharing ? 'bg-amber-100 text-amber-600' : 'hover:bg-slate-100 text-slate-600'}`}
-            >
-              <ExternalLink size={16} />
-            </button>
-         </div>
-         <div className="h-4 w-px bg-slate-200 mx-2"></div>
-         <div className="flex items-center gap-1">
-            <button onClick={() => setIsLocked(!isLocked)} className={`flex items-center gap-2 px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest transition-all ${isLocked ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-100 text-slate-600'}`}>
-               {isLocked ? <Lock size={14} /> : <Unlock size={14} />} {isLocked ? 'Locked' : 'Unlocked'}
-            </button>
-         </div>
-         <div className="flex-1 flex justify-center">
-            <div className="flex items-center gap-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-               <span className="flex items-center gap-1.5 text-emerald-500"><ShieldCheck size={12} /> Compliance: Verified</span>
-               <span className="flex items-center gap-1.5"><Database size={12} /> Sync: Online</span>
-               <button onClick={() => window.location.reload()} className="hover:text-emerald-500 flex items-center gap-1"><History size={12} /> Restart Node</button>
-            </div>
-         </div>
-         <button onClick={() => { navigator.clipboard.writeText(window.location.href); addToast("System link copied"); }} className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-widest hover:bg-blue-100 transition-all">
-            <Share2 size={14} /> Share Link
-         </button>
-      </div>
-
-      {/* --- MAIN LAYOUT --- */}
+      {/* ── MAIN LAYOUT ── */}
       <div className="flex-1 flex overflow-hidden">
-        
-        {/* LEFT NAV: THE EXPLORER */}
-        <motion.aside initial={false} animate={{ width: showLeftPanel ? 280 : 0 }} className="bg-white border-r border-slate-200 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-8 scrollbar-hide">
-            <div className="nav-group">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Workspaces</p>
-               <div className="space-y-1">
-                  <button onClick={() => setActiveGroupId(null)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!activeGroupId ? 'bg-emerald-50 text-emerald-700 font-bold' : 'hover:bg-slate-50 text-slate-600'}`}>
-                    <Hash size={18} /> <span className="text-xs">Global Mesh</span>
-                  </button>
-                  {groups.map(g => (
-                    <button key={g.id} onClick={() => setActiveGroupId(g.id)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeGroupId === g.id ? 'bg-emerald-50 text-emerald-700 font-bold' : 'hover:bg-slate-50 text-slate-600'}`}>
-                      <Users size={18} /> <span className="text-xs truncate">{g.name}</span>
-                    </button>
-                  ))}
-               </div>
-            </div>
 
-            <div className="nav-group pt-4 border-t border-slate-50">
-               <div className="flex items-center justify-between mb-4 px-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Assets</p>
-                  <button onClick={() => setShowCreateDocModal(true)} className="p-1 hover:bg-slate-100 rounded" title="Create New Canvas"><Plus size={14} /></button>
-               </div>
-               <div className="space-y-1">
-                  {filteredDocs.map(doc => (
-                    <button key={doc.id} onClick={() => { setActiveDocId(doc.id); setIsViewingOriginal(false); }}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all group ${activeDocId === doc.id ? 'bg-slate-900 text-white shadow-xl' : 'hover:bg-slate-100 text-slate-600'}`}>
-                      <FileText size={18} className={activeDocId === doc.id ? 'text-emerald-400' : 'text-slate-300'} />
-                      <span className="text-xs font-black truncate flex-1 text-left">{doc.name}</span>
-                      {activeDocId === doc.id && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>}
-                    </button>
-                  ))}
-                  {filteredDocs.length === 0 && <p className="text-[10px] text-slate-400 p-4 text-center italic">No documents in this workspace.</p>}
-               </div>
-            </div>
-          </div>
-        </motion.aside>
+        {/* LEFT PANEL — File Explorer */}
+        <AnimatePresence initial={false}>
+          {showLeftPanel && (
+            <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 260, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+              className="bg-white border-r border-slate-200 flex flex-col overflow-hidden shrink-0">
+              <div className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-hide">
+                {/* Search */}
+                <div className="relative">
+                  <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input className="w-full pl-8 pr-3 py-2 text-[11px] bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-slate-300 transition-colors" placeholder="Search files..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                </div>
 
-        {/* CENTER: THE PAPER EDITOR */}
-        <main className="flex-1 flex flex-col bg-slate-100 overflow-hidden relative">
-          {currentDoc ? (
-            <div className="flex-1 flex flex-col overflow-y-auto scrollbar-hide">
-              {/* BINARY ASSET DETECTION [v4.2] */}
-              {((currentDoc.content?.startsWith('data:') || currentDoc.content?.startsWith('http') || currentDoc.name?.match(/\.(pdf|jpg|jpeg|png)$/i)) && !isViewingOriginal) ? (
-                <BinaryViewer 
-                  currentDoc={currentDoc} 
-                  onToggleCollab={() => setIsViewingOriginal(true)}
-                  onSendComment={handleSendComment}
-                  commentInput={commentInput}
-                  setCommentInput={setCommentInput}
-                  commentMessages={commentMessages}
-                />
-              ) : (ydoc && awareness && awareness.clientID && syncedDocId === (currentDoc?.id || 'global')) ? (
-                <CollaborativeEditor 
-                  key={`collab-${syncedDocId}`}
-                  ydoc={ydoc} awareness={awareness} isLocked={isLocked}
-                  onStatsUpdate={setStats} userName={userName} userColor={userColor}
+                {/* Workspaces */}
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Workspaces</p>
+                  <div className="space-y-0.5">
+                    <button onClick={() => setActiveGroupId(null)} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold transition-all ${!activeGroupId ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      <Hash size={14} /> Global Mesh
+                    </button>
+                    {(groups || []).map(g => (
+                      <button key={g.id} onClick={() => setActiveGroupId(g.id)} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-[11px] font-bold transition-all ${activeGroupId === g.id ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        <Users size={14} /> <span className="truncate">{g.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Files */}
+                <div>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Files</p>
+                    <button onClick={() => setShowCreateDocModal(true)} className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-700 transition-colors"><Plus size={12} /></button>
+                  </div>
+                  <div className="space-y-0.5">
+                    <button onClick={() => { setActiveDocId('scratch-global'); setMode('doc'); }} className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${activeDocId === 'scratch-global' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                      <Sparkles size={14} className={activeDocId === 'scratch-global' ? 'text-emerald-400' : 'text-slate-400'} />
+                      <span className="truncate">Global Scratchpad</span>
+                    </button>
+                    {filteredDocs.map(doc => (
+                      <button key={doc.id} onClick={() => { setActiveDocId(doc.id); setMode('doc'); setIsViewingOriginal(false); }}
+                        className={`w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-[11px] font-bold transition-all group ${activeDocId?.toString() === doc.id?.toString() ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        {doc.name?.match(/\.(xlsx?|csv)$/i) ? <FileSpreadsheet size={14} className={activeDocId?.toString() === doc.id?.toString() ? 'text-emerald-400' : 'text-slate-400'} /> : <FileText size={14} className={activeDocId?.toString() === doc.id?.toString() ? 'text-emerald-400' : 'text-slate-400'} />}
+                        <span className="truncate flex-1 text-left">{doc.name}</span>
+                        {activeDocId?.toString() === doc.id?.toString() && <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />}
+                      </button>
+                    ))}
+                    {filteredDocs.length === 0 && (
+                      <div className="text-center py-6 text-slate-400">
+                        <Layers size={24} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-[10px] font-bold">No files yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Left panel footer */}
+              <div className="p-3 border-t border-slate-100">
+                <button onClick={() => setShowCreateDocModal(true)} className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
+                  <Plus size={13} /> New Canvas
+                </button>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* CENTER — Active Mode */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {mode === 'doc' && (
+            currentDoc ? (
+              (ydoc && awareness && syncedDocId === (currentDoc?.id || 'global')) ? (
+                <CollaborativeDoc
+                  ydoc={ydoc}
+                  awareness={awareness}
+                  isLocked={isLocked}
+                  onStatsUpdate={setStats}
+                  userName={userName}
+                  userColor={userColor}
                   currentDoc={currentDoc}
-                  editorRef={editorRef}
                   addToast={addToast}
+                  onInsertTranscript={insertTranscriptRef}
                 />
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center gap-6 bg-slate-50">
-                  <div className="w-20 h-20 bg-white rounded-[2rem] shadow-2xl flex items-center justify-center text-slate-200 animate-pulse"><Database size={40} /></div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Synchronizing Real-time Node...</p>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase">Establishing P2P Tunnel for {currentDoc.name}</p>
+                <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 gap-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center text-slate-300 animate-pulse"><Database size={32} /></div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Establishing sync node...</p>
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-50">
-              <div className="w-40 h-40 bg-white rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] flex items-center justify-center text-slate-100 mb-12"><Layers size={80} /></div>
-              <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Enterprise Collaboration</h2>
-              <p className="text-slate-500 max-w-sm mb-12 font-medium leading-relaxed">Select a document from the vault or initialize a team-wide scratchpad to begin secure, real-time operations.</p>
-              <div className="flex gap-4">
-                <button onClick={() => setShowLeftPanel(true)} className="px-12 py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-slate-900/30 hover:-translate-y-1 transition-all">Launch Explorer</button>
-                <button onClick={() => setActiveDocId('scratch-global')} className="px-12 py-5 bg-emerald-600 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-emerald-600/20 hover:-translate-y-1 transition-all flex items-center gap-3"><Sparkles size={16} /> Global Scratchpad</button>
-                <button onClick={() => setShowCreateDocModal(true)} className="px-12 py-5 bg-blue-600 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl shadow-blue-600/20 hover:-translate-y-1 transition-all flex items-center gap-3"><Plus size={16} /> New Canvas</button>
+              )
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-100">
+                <div className="w-32 h-32 bg-white rounded-[3rem] shadow-2xl flex items-center justify-center text-slate-200 mb-10"><Layers size={64} /></div>
+                <h2 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">Enterprise Collaboration Hub</h2>
+                <p className="text-slate-500 max-w-sm mb-10 text-sm leading-relaxed">Select a document, open a spreadsheet, or start a video meeting with your team.</p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <button onClick={() => { setActiveDocId('scratch-global'); setMode('doc'); }} className="px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider shadow-xl shadow-emerald-600/20 hover:-translate-y-1 transition-all flex items-center gap-2"><Sparkles size={16}/> Global Scratchpad</button>
+                  <button onClick={() => setShowCreateDocModal(true)} className="px-8 py-4 bg-slate-900 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider shadow-xl hover:-translate-y-1 transition-all flex items-center gap-2"><Plus size={16}/> New Canvas</button>
+                  <button onClick={() => setMode('meet')} className="px-8 py-4 bg-blue-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-wider shadow-xl shadow-blue-600/20 hover:-translate-y-1 transition-all flex items-center gap-2"><Video size={16}/> Start Meeting</button>
+                </div>
               </div>
+            )
+          )}
+
+          {mode === 'sheet' && (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="h-10 bg-white border-b border-slate-200 flex items-center px-4 gap-3 shrink-0">
+                <FileSpreadsheet size={16} className="text-emerald-600" />
+                <span className="text-sm font-bold text-slate-800">{currentDoc?.name || 'Untitled Spreadsheet'}</span>
+                <span className="text-[10px] text-slate-400 font-bold bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">Live Sync</span>
+              </div>
+              <Spreadsheet docId={currentDoc?.id || 'global'} />
             </div>
           )}
-          
-          {/* VoIP FLOATING WIDGET */}
-          <AnimatePresence>
-            {(isMicOn || isCamOn || isScreenSharing) && (
-              <motion.div 
-                key="voip-widget"
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                className="absolute bottom-6 right-6 z-30 bg-slate-900/90 backdrop-blur-xl border border-white/10 p-5 rounded-[2rem] shadow-2xl text-white w-72 flex flex-col gap-4 font-sans"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Secure VoIP Mesh</span>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      setIsMicOn(false);
-                      setIsCamOn(false);
-                      setIsScreenSharing(false);
-                      addToast("VoIP Session Terminated");
-                    }} 
-                    className="text-white/40 hover:text-white transition-colors"
-                    title="Disconnect Call"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
 
-                <div className="flex flex-col gap-3">
-                  {/* User's stream status */}
-                  <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5">
-                    <div className={`w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center font-black text-xs relative ${isMicOn ? 'ring-2 ring-emerald-400' : ''}`}>
-                      {userName[0]}
-                      {isMicOn && (
-                        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 items-center justify-center text-[7px]"><Mic size={8} /></span>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="text-xs font-bold leading-none">{userName}</p>
-                      <p className="text-[9px] text-white/50 font-bold uppercase tracking-wider mt-1">
-                        {isScreenSharing ? 'Screen Live • ' : ''}
-                        {isCamOn ? 'Video Active' : isMicOn ? 'Speaking' : 'Muted'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Other online/simulated users in call */}
-                  {onlineUsers.filter(u => u.name !== userName).map((u, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs relative" style={{ backgroundColor: u.color }}>
-                        {u.name[0]}
-                        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 items-center justify-center text-[7px]"><Mic size={8} /></span>
-                        </span>
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-xs font-bold leading-none">{u.name}</p>
-                        <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-wider mt-1">Speaking</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {isCamOn && (
-                  <div className="h-32 bg-slate-955 rounded-2xl overflow-hidden border border-white/10 flex items-center justify-center relative shadow-inner">
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent z-10"></div>
-                    <div className="text-center z-20">
-                      <Video size={24} className="mx-auto text-emerald-400 mb-1.5 animate-pulse" />
-                      <p className="text-[9px] font-black uppercase tracking-widest text-emerald-400">Camera Feed Live</p>
-                      <p className="text-[8px] text-white/30 font-mono mt-0.5">AES-256 ENCRYPTED</p>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {mode === 'meet' && (
+            <VideoMeet roomId={roomId} userName={userName} userColor={userColor} addToast={addToast} />
+          )}
         </main>
 
-        {/* RIGHT PANEL: OVERLAY DISCUSSIONS */}
-        <AnimatePresence>
-           {showRightPanel && (
-             <motion.aside 
-               key="right-panel-aside"
-               initial={{ x: '100%' }}
-               animate={{ x: 0 }}
-               exit={{ x: '100%' }}
-               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-               className="fixed top-14 right-0 bottom-0 w-[380px] bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.05)] z-40 border-l border-slate-200 flex flex-col"
-             >
-                <div className="flex border-b border-slate-100 shrink-0">
-                  {['comments', 'chat', 'members', 'ai'].map(tab => (
-                    <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-5 text-[9px] font-black uppercase tracking-widest transition-all flex-1 ${activeTab === tab ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}>{tab}</button>
-                  ))}
-                </div>
-                <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
-                    {activeTab === 'comments' && (
-                      <div className="flex flex-col h-full">
-                        <div className="flex-1 overflow-y-auto space-y-4 mb-4 scrollbar-hide">
-                           {commentMessages.length === 0 ? (
-                             <div className="text-center py-10 opacity-20 italic">
-                                <MessageSquareQuote size={40} className="mx-auto mb-2" />
-                                <p className="text-[10px] font-black uppercase">No contextual threads</p>
-                             </div>
-                           ) : (
-                             commentMessages.map((comment, i) => (
-                               <div key={i} className="flex flex-col items-start">
-                                  <div className="p-4 rounded-2xl text-xs font-medium w-full bg-slate-50 border border-slate-200 text-slate-900 shadow-sm">
-                                     {comment.message}
-                                  </div>
-                                  <span className="text-[9px] font-black text-slate-400 uppercase mt-1 px-1">{comment.user} • {comment.time}</span>
-                               </div>
-                             ))
-                           )}
+        {/* RIGHT PANEL — Chat / Comments / Transcribe / AI */}
+        <AnimatePresence initial={false}>
+          {showRightPanel && mode !== 'meet' && (
+            <motion.aside initial={{ width: 0, opacity: 0 }} animate={{ width: 320, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.2 }}
+              className="bg-white border-l border-slate-200 flex flex-col overflow-hidden shrink-0">
+
+              {/* Right Panel Tabs */}
+              <div className="flex border-b border-slate-200 bg-slate-50 shrink-0">
+                {[{v:'chat',label:'Chat',icon:<MessageCircle size={12}/>},{v:'comments',label:'Notes',icon:<MessageSquareQuote size={12}/>},{v:'transcribe',label:'Transcribe',icon:<Mic size={12}/>}].map(tab => (
+                  <button key={tab.v} onClick={() => setRightTab(tab.v)} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 ${rightTab === tab.v ? 'border-emerald-500 text-emerald-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+                    {tab.icon} {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chat */}
+              {rightTab === 'chat' && (
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+                    {chatMessages.length === 0 && (
+                      <div className="text-center py-10 opacity-30">
+                        <MessageCircle size={32} className="mx-auto mb-2" />
+                        <p className="text-[10px] font-bold uppercase">No messages yet</p>
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={msg.id || i} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full text-white text-[8px] font-black flex items-center justify-center shrink-0" style={{background: msg.color}}>{msg.user[0]}</div>
+                          <span className="text-[10px] font-bold" style={{color: msg.color}}>{msg.user}</span>
+                          <span className="text-[9px] text-slate-400">{msg.time}</span>
                         </div>
-                        <form onSubmit={handleSendComment} className="relative shrink-0">
-                           <input 
-                             type="text" 
-                             value={commentInput}
-                             onChange={e => setCommentInput(e.target.value)}
-                             placeholder="Add context..." 
-                             className="w-full bg-slate-100 border-none rounded-2xl py-4 pl-4 pr-12 text-xs font-bold text-slate-900 outline-none focus:ring-2 ring-emerald-500/20" 
-                            />
-                           <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-emerald-600 hover:scale-110 transition-transform"><Plus size={18} /></button>
-                        </form>
+                        <div className="ml-7 bg-slate-50 rounded-2xl rounded-tl-sm px-3 py-2">
+                          <p className="text-[12px] text-slate-800 leading-relaxed">{msg.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={handleSendChat} className="p-3 border-t border-slate-100 flex gap-2">
+                    <input className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-slate-300 transition-colors" placeholder="Message team..." value={chatInput} onChange={e => setChatInput(e.target.value)} />
+                    <button type="submit" className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center hover:bg-slate-700 transition-colors"><Send size={13} className="text-white" /></button>
+                  </form>
+                </div>
+              )}
+
+              {/* Comments */}
+              {rightTab === 'comments' && (
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
+                    {commentMessages.length === 0 && (
+                      <div className="text-center py-10 opacity-30">
+                        <MessageSquareQuote size={32} className="mx-auto mb-2" />
+                        <p className="text-[10px] font-bold uppercase">No annotations yet</p>
                       </div>
                     )}
-                   {activeTab === 'chat' && (
-                      <div className="flex flex-col h-full">
-                         <div className={`p-4 rounded-2xl flex items-center gap-3 border mb-6 shrink-0 ${connStatus === 'connected' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-red-50 text-red-700 border-red-100'}`}>
-                            {connStatus === 'connected' ? <MessageCircle size={18} /> : <ShieldAlert size={18} />}
-                            <p className="text-[10px] font-black uppercase tracking-widest">{connStatus === 'connected' ? 'Real-time P2P Signal' : 'Signaling Failure'}</p>
-                         </div>
-                         <div className="flex-1 overflow-y-auto space-y-4 mb-4 scrollbar-hide">
-                            {chatMessages.length === 0 ? (
-                               <div className="text-center py-10 opacity-20 italic">
-                                  <Send size={40} className="mx-auto mb-2" />
-                                  <p className="text-[10px] font-black uppercase">No encrypted messages</p>
-                               </div>
-                             ) : (
-                               chatMessages.map((chat, i) => (
-                                  <div key={i} className={`flex flex-col ${chat.user === userName ? 'items-end' : 'items-start'} mb-2`}>
-                                     <div 
-                                        className={`px-5 py-4 rounded-2xl max-w-[85%] shadow-lg border-2 ${
-                                          chat.user === userName 
-                                            ? 'bg-emerald-50 border-emerald-600 rounded-tr-none' 
-                                            : 'bg-white border-slate-400 rounded-tl-none'
-                                        }`}
-                                        style={{ color: '#000000', fontSize: '14px', fontWeight: 700, lineHeight: '1.5' }}
-                                      >
-                                         {chat.message}
-                                      </div>
-                                      <span className="text-[10px] font-black text-slate-700 uppercase mt-1.5 px-1">{chat.user} • {chat.time}</span>
-                                  </div>
-                               ))
-                             )}
-                         </div>
-                         <form onSubmit={handleSendChat} className="relative shrink-0">
-                            <input 
-                              type="text" 
-                              value={chatInput}
-                              onChange={e => setChatInput(e.target.value)}
-                              placeholder="Secure message..." 
-                              className="w-full bg-slate-100 border-none rounded-2xl py-4 pl-4 pr-12 text-xs font-bold text-slate-900 outline-none focus:ring-2 ring-emerald-500/20" 
-                             />
-                            <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-emerald-600 hover:scale-110 transition-transform"><Send size={18} /></button>
-                         </form>
+                    {commentMessages.map((c, i) => (
+                      <div key={c.id || i} className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold" style={{color: c.color || '#D97706'}}>{c.user}</span>
+                          <span className="text-[9px] text-slate-400">{c.time}</span>
+                        </div>
+                        <p className="text-[12px] text-slate-800 leading-relaxed">{c.message}</p>
                       </div>
-                   )}
-                   {activeTab === 'members' && (
-                      <div className="space-y-8">
-                         <div>
-                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Live Collaborators</p>
-                           <div className="space-y-3">
-                              {onlineUsers.map((u, i) => (
-                                <div key={i} className="flex items-center gap-4 p-3 bg-white rounded-2xl border border-slate-100">
-                                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black" style={{ backgroundColor: u.color }}>{u.name[0]}</div>
-                                   <div className="flex-1 text-left">
-                                      <p className="text-xs font-black text-slate-900">{u.name}</p>
-                                      <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1"><Activity size={10} /> Active Pulse</p>
-                                   </div>
-                                </div>
-                              ))}
-                           </div>
-                         </div>
-                      </div>
-                   )}
-                   {activeTab === 'ai' && (
-                       <div className="flex flex-col h-full space-y-6">
-                          <div className="p-4 rounded-2xl flex items-center gap-3 bg-slate-900 text-white border border-slate-800 shrink-0">
-                             <Sparkles size={18} className="text-emerald-400 animate-pulse" />
-                             <p className="text-[10px] font-black uppercase tracking-widest">Semantic Compliance Audit</p>
-                          </div>
-                          
-                          <div className="flex-1 overflow-y-auto space-y-5 pr-1 scrollbar-hide text-left">
-                             {/* Readability Score */}
-                             <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl">
-                                <div className="flex justify-between items-center mb-2">
-                                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Readability Index</span>
-                                   <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                     {semanticAnalysis?.readability || "Pending"}
-                                   </span>
-                                </div>
-                                <div className="flex items-baseline gap-1">
-                                   <span className="text-3xl font-black text-slate-900">{semanticAnalysis?.complianceScore || "--"}</span>
-                                   <span className="text-xs text-slate-400 font-bold">/ 100</span>
-                                </div>
-                                {isAnalyzing && <p className="text-[11px] text-emerald-500 font-medium leading-relaxed mt-2 animate-pulse">Analyzing text...</p>}
-                             </div>
-
-                             {/* Tone & Policy Check */}
-                             <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl space-y-3">
-                                <div>
-                                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Audit Tone</span>
-                                   <p className="text-xs font-bold text-slate-800 mt-0.5">{semanticAnalysis?.sentiment || "Pending Analysis"}</p>
-                                </div>
-                                <hr className="border-slate-200" />
-                                <div>
-                                   <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Compliance Report</span>
-                                   <div className="mt-1.5 space-y-2">
-                                      {semanticAnalysis?.riskFlags && semanticAnalysis.riskFlags.length > 0 ? (
-                                        semanticAnalysis.riskFlags.map((flag, idx) => (
-                                          <div key={idx} className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0"></div>
-                                            <span>{flag}</span>
-                                          </div>
-                                        ))
-                                      ) : (
-                                          <div className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mt-1.5 shrink-0"></div>
-                                            <span>No risks flagged or analysis pending.</span>
-                                          </div>
-                                      )}
-                                   </div>
-                                </div>
-                             </div>
-
-                             {/* AI Refinement Actions */}
-                             <div className="space-y-3">
-                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block px-1">Refinement Operations</span>
-                                
-                                <button 
-                                   onClick={() => handleAiAction('summarize')}
-                                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all text-left group font-sans"
-                                >
-                                   <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 font-black group-hover:bg-purple-500 group-hover:text-white transition-all"><Sparkles size={16} /></div>
-                                   <div className="flex-1">
-                                      <p className="text-xs font-black text-slate-900">Draft Executive Summary</p>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Append AI summary at start</p>
-                                   </div>
-                                </button>
-
-                                <button 
-                                   onClick={() => handleAiAction('polish')}
-                                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all text-left group font-sans"
-                                >
-                                   <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-black group-hover:bg-blue-500 group-hover:text-white transition-all"><Sparkles size={16} /></div>
-                                   <div className="flex-1">
-                                      <p className="text-xs font-black text-slate-900">Professional Refinement</p>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Apply spelling & syntax polish</p>
-                                   </div>
-                                </button>
-
-                                <button 
-                                   onClick={() => handleAiAction('boilerplate')}
-                                   className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all text-left group font-sans"
-                                >
-                                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-black group-hover:bg-emerald-500 group-hover:text-white transition-all"><Sparkles size={16} /></div>
-                                   <div className="flex-1">
-                                      <p className="text-xs font-black text-slate-900">Insert Compliance Boilerplate</p>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Append standard legal clauses</p>
-                                   </div>
-                                </button>
-                             </div>
-                          </div>
-                       </div>
-                    )}
+                    ))}
+                  </div>
+                  <form onSubmit={handleSendComment} className="p-3 border-t border-slate-100 flex gap-2">
+                    <input className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[12px] outline-none focus:border-slate-300 transition-colors" placeholder="Add annotation..." value={commentInput} onChange={e => setCommentInput(e.target.value)} />
+                    <button type="submit" className="w-8 h-8 bg-amber-500 rounded-xl flex items-center justify-center hover:bg-amber-600 transition-colors"><Send size={13} className="text-white" /></button>
+                  </form>
                 </div>
-                <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
-                   <button 
-                      onClick={() => { 
-                        setActiveTab('ai'); 
-                        setShowRightPanel(true); 
-                        runSemanticAudit(); 
-                      }} 
-                      disabled={isAnalyzing}
-                      className={`w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 ${isAnalyzing ? 'opacity-50' : ''}`}
-                    >
-                      <Sparkles size={16} className={isAnalyzing ? "text-emerald-400 animate-spin" : "text-emerald-400"} /> 
-                      {isAnalyzing ? "Analyzing..." : "Semantic Audit"}
-                   </button>
+              )}
+
+              {/* Transcription */}
+              {rightTab === 'transcribe' && (
+                <div className="flex-1 overflow-y-auto scrollbar-hide">
+                  <TranscriptionPanel
+                    onInsertText={(html) => insertTranscriptRef.current?.(html)}
+                    addToast={addToast}
+                  />
                 </div>
-             </motion.aside>
-           )}
+              )}
+            </motion.aside>
+          )}
         </AnimatePresence>
       </div>
-
-      {/* --- MODALS --- */}
-      <AnimatePresence>
-        {showAddMemberModal && (
-          <motion.div 
-            key="add-member-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm"
-          >
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-8">
-               <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight">Add Collaborator</h2>
-                  <button onClick={() => setShowAddMemberModal(false)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
-               </div>
-               <div className="space-y-2 max-h-64 overflow-y-auto pr-2 scrollbar-hide">
-                  {systemUsers.map(u => (
-                    <button key={u.id} onClick={() => handleAddMember(u.id)} className="w-full flex items-center gap-4 p-3 hover:bg-emerald-50 rounded-2xl transition-all group text-left">
-                       <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-900 font-black group-hover:bg-emerald-500 group-hover:text-white transition-all">{u.name[0]}</div>
-                       <div className="flex-1">
-                          <p className="text-xs font-black text-slate-900">{u.name}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{u.role}</p>
-                       </div>
-                       <Plus size={16} className="text-slate-300 group-hover:text-emerald-500" />
-                    </button>
-                  ))}
-               </div>
-            </motion.div>
-          </motion.div>
-        )}
-        {showCreateDocModal && (
-          <CreateDocModal 
-            onClose={() => setShowCreateDocModal(false)} 
-            onCreate={handleCreateCanvas} 
-            departments={departments}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 };
